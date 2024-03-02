@@ -21,7 +21,8 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
-- row-types
+# - row-types
+- containers
 
 ghc-options:
 - -Wall
@@ -50,11 +51,6 @@ executables:
 
 tests:
   branch-and-prune-test:
-    main:                Spec.hs
-    source-dirs:         test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+    defaults: hspec/hspec@main
     dependencies:
     - branch-and-prune

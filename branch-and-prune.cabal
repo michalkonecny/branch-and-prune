@@ -25,7 +25,8 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      BranchAndPrune
+      IntSets
   other-modules:
       Paths_branch_and_prune
   autogen-modules:
@@ -35,7 +36,7 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
-    , row-types
+    , containers
   default-language: Haskell2010
 
 executable branch-and-prune-exe
@@ -50,21 +51,24 @@ executable branch-and-prune-exe
   build-depends:
       base >=4.7 && <5
     , branch-and-prune
-    , row-types
+    , containers
   default-language: Haskell2010
 
 test-suite branch-and-prune-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      IntSetsSpec
       Paths_branch_and_prune
   autogen-modules:
       Paths_branch_and_prune
   hs-source-dirs:
       test
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
     , branch-and-prune
-    , row-types
+    , containers
+    , hspec ==2.*
   default-language: Haskell2010
+  build-tool-depends: hspec-discover:hspec-discover == 2.*
