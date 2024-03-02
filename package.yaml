@@ -53,4 +53,5 @@ tests:
   branch-and-prune-test:
     defaults: hspec/hspec@main
     dependencies:
+    - hspec
     - branch-and-prune

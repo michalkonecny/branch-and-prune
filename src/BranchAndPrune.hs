@@ -107,6 +107,7 @@ branchAndPrune (Params {..} :: Params basicSet set priorityQueue constraint) =
     step :: Paving set -> priorityQueue -> Paving set
     step pavingSoFar queue =
       case queuePickNext queue of
+        Nothing -> pavingSoFar
         Just ((b, c), queuePicked)
           | not (goalReached pavingSoFar) ->
               let (cPruned, prunePaving) = pruneBasicSet c b
@@ -120,7 +121,6 @@ branchAndPrune (Params {..} :: Params basicSet set priorityQueue constraint) =
                         then step pavingWithPruningUndecided queuePicked
                         else step pavingAfterPruning queueWithPruningUndecided
           | otherwise ->
-              pavingSoFar {undecided = pavingSoFar.undecided `setUnion` queueAsSet}
-          where
-            queueAsSet = fromBasicSets (map fst $ queueToList queue)
-        Nothing -> pavingSoFar
+              let queueAsSet = fromBasicSets (map fst $ queueToList queue)
+               in pavingSoFar {undecided = pavingSoFar.undecided `setUnion` queueAsSet}
+  
