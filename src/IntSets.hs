@@ -14,6 +14,8 @@
 -- chiefly for testing and educational purposes.
 module IntSets
   ( IntSet (..),
+    intSetN,
+    intSetLU,
     BasicIntSet (..),
     IntConstraint (..),
   )
@@ -22,14 +24,14 @@ where
 import qualified BranchAndPrune as BP
 import qualified Data.Set as Set
 
-newtype IntSet = IntSet (Set.Set Int)
+newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show)
 
 instance BP.IsSet IntSet where
   emptySet = IntSet Set.empty
   setIsEmpty (IntSet set) = Set.null set
   setUnion (IntSet set1) (IntSet set2) = IntSet (Set.union set1 set2)
 
-data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int}
+data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int} deriving (Eq, Show)
 
 instance BP.SetFromBasic BasicIntSet IntSet where
   fromBasicSets basicSets =
@@ -50,6 +52,7 @@ instance BP.CanSplitSet BasicIntSet IntSet where
         | otherwise = lookForIntervals n n ns ((BasicIntSet l u) : prev)
 
 data IntConstraint = IntEq Int | IntTrue | IntFalse -- \| IntNeq Int
+  deriving (Eq, Show)
 
 intSetLU :: Int -> Int -> IntSet
 intSetLU l u = IntSet (Set.fromList [l .. u])

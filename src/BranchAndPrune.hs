@@ -14,9 +14,10 @@ module BranchAndPrune
     CanPrune (..),
     CanSplitSet (..),
     Paving (..),
-    pavingInnerUndecided,
     pavingInner,
     pavingOuter,
+    pavingInnerOuter,
+    pavingInnerUndecided,
     pavingOuterUndecided,
     IsPriorityQueue (..),
     Params (..),
@@ -49,6 +50,7 @@ data Paving set = Paving
     undecided :: set,
     outer :: set
   }
+  deriving (Eq, Show)
 
 emptyPaving :: (IsSet set) => Paving set
 emptyPaving =
@@ -70,6 +72,9 @@ pavingInner inner = Paving {inner, undecided = emptySet, outer = emptySet}
 
 pavingOuter :: (IsSet set) => set -> Paving set
 pavingOuter outer = Paving {inner = emptySet, undecided = emptySet, outer}
+
+pavingInnerOuter :: (IsSet set) => set -> set -> Paving set
+pavingInnerOuter inner outer = Paving {inner, undecided = emptySet, outer}
 
 pavingInnerUndecided :: (IsSet set) => set -> set -> Paving set
 pavingInnerUndecided inner undecided = Paving {inner, undecided, outer = emptySet}
@@ -114,7 +119,8 @@ branchAndPrune (Params {..} :: Params basicSet set priorityQueue constraint) =
                       if shouldGiveUpOnSet prunePaving.undecided
                         then step pavingWithPruningUndecided queuePicked
                         else step pavingAfterPruning queueWithPruningUndecided
-        _ ->
-          pavingSoFar {undecided = pavingSoFar.undecided `setUnion` queueAsSet}
+          | otherwise ->
+              pavingSoFar {undecided = pavingSoFar.undecided `setUnion` queueAsSet}
           where
             queueAsSet = fromBasicSets (map fst $ queueToList queue)
+        Nothing -> pavingSoFar
