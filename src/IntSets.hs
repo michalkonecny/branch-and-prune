@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- |
 -- This module impements very simple constraints over sets of integers and
@@ -20,10 +21,13 @@ module IntSets
     BasicIntSet (..),
     IntConstraint (..),
     IntSetStack (..),
+    IntSetBPParams(..),
+    intSetBranchAndPrune,
   )
 where
 
 import qualified BranchAndPrune as BP
+import Control.Monad.Logger (MonadLogger)
 import qualified Data.Set as Set
 
 newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show)
@@ -96,3 +100,24 @@ instance BP.IsPriorityQueue IntSetStack (BasicIntSet, IntConstraint) where
   queuePickNext (IntSetStack []) = Nothing
   queuePickNext (IntSetStack (e : es)) = Just (e, IntSetStack es)
   queueAddMany (IntSetStack es) new_es = IntSetStack (new_es ++ es)
+
+data IntSetBPParams = IntSetBPParams
+  { scope :: BasicIntSet,
+    constraint :: IntConstraint
+  }
+
+intSetBranchAndPrune :: (MonadLogger m) => IntSetBPParams -> m (BP.Paving IntSet)
+intSetBranchAndPrune (IntSetBPParams {..}) =
+  BP.branchAndPruneM
+    ( BP.ParamsM
+        { BP.scope,
+          BP.constraint,
+          BP.goalReached = (\_ -> False) :: BP.Paving IntSet -> Bool,
+          BP.shouldGiveUpOnSet = (\_ -> False) :: IntSet -> Bool,
+          BP.dummyPriorityQueue,
+          BP.dummyMaction = pure ()
+        }
+    )
+  where
+    dummyPriorityQueue :: IntSetStack
+    dummyPriorityQueue = IntSetStack [(BasicIntSet 0 0, IntFalse)]

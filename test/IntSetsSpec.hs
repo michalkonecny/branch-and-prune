@@ -1,36 +1,32 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
-
 module IntSetsSpec (spec) where
 
-import Test.Hspec
-import Control.Monad.Logger (LoggingT, runStdoutLoggingT)
-
 import qualified BranchAndPrune as BP
+import Control.Monad.Logger (LoggingT (LoggingT), runStdoutLoggingT)
 import IntSets
   ( BasicIntSet (BasicIntSet),
     IntConstraint (IntEq, IntFalse),
-    IntSet, intSetN,
+    IntSet (IntSet),
     IntSetStack (IntSetStack),
+    intSetBranchAndPrune,
+    intSetN, IntSetBPParams (..),
   )
-
-dummyPriorityQueue :: IntSetStack
-dummyPriorityQueue = IntSetStack [(BasicIntSet 0 0, IntFalse)]
+import Test.Hspec
 
 spec :: Spec
 spec = do
   describe "branch and prune over IntSet" $ do
     it "solves (=1) over scope {1, 2}" $
       do
-        runStdoutLoggingT (BP.branchAndPruneM
-          ( BP.ParamsM
-              { BP.scope = BasicIntSet 1 2,
-                BP.constraint = IntEq 1,
-                BP.goalReached = (\_ -> False) :: BP.Paving IntSet -> Bool,
-                BP.shouldGiveUpOnSet = (\_ -> False) :: IntSet -> Bool,
-                BP.dummyPriorityQueue,
-                BP.dummyMaction = pure () :: LoggingT IO ()
-              }
-          ))
+        runStdoutLoggingT
+          ( intSetBranchAndPrune
+              ( IntSetBPParams
+                  { scope = BasicIntSet 1 2,
+                    constraint = IntEq 1
+                  }
+              )
+              :: LoggingT IO (BP.Paving IntSet)
+          )
           `shouldReturn` (BP.pavingInnerOuter (intSetN 1) (intSetN 2) :: BP.Paving IntSet)
