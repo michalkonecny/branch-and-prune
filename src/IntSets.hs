@@ -1,3 +1,4 @@
+{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -18,6 +19,7 @@ module IntSets
     intSetLU,
     BasicIntSet (..),
     IntConstraint (..),
+    IntSetStack (..),
   )
 where
 
@@ -41,15 +43,24 @@ instance BP.SetFromBasic BasicIntSet IntSet where
 
 instance BP.CanSplitSet BasicIntSet IntSet where
   splitSet (IntSet nSet) =
-    case nAscendingList of
-      [] -> []
-      (n : ns) -> lookForIntervals n n ns []
+    splitIfOnlyOne basicSets
     where
-      nAscendingList = Set.toAscList nSet
-      lookForIntervals l u [] prev = (BasicIntSet l u) : prev
-      lookForIntervals l u (n : ns) prev
-        | n == u + 1 = lookForIntervals l n ns prev
-        | otherwise = lookForIntervals n n ns ((BasicIntSet l u) : prev)
+      splitIfOnlyOne [BasicIntSet l u]
+        | l < u =
+            [BasicIntSet l m, BasicIntSet (m + 1) u]
+        where
+          m = (l + u) `div` 2
+      splitIfOnlyOne bs = bs
+      basicSets =
+        case nAscendingList of
+          [] -> []
+          (n : ns) -> lookForIntervals n n ns []
+        where
+          nAscendingList = Set.toAscList nSet
+          lookForIntervals l u [] prev = (BasicIntSet l u) : prev
+          lookForIntervals l u (n : ns) prev
+            | n == u + 1 = lookForIntervals l n ns prev
+            | otherwise = lookForIntervals n n ns ((BasicIntSet l u) : prev)
 
 data IntConstraint = IntEq Int | IntTrue | IntFalse -- \| IntNeq Int
   deriving (Eq, Show)
@@ -60,20 +71,28 @@ intSetLU l u = IntSet (Set.fromList [l .. u])
 intSetN :: Int -> IntSet
 intSetN n = IntSet (Set.singleton n)
 
-instance BP.CanPrune BasicIntSet IntConstraint IntSet where
-  pruneBasicSet c@(IntEq n) (BasicIntSet l u)
-    | l == n && n == u =
-        (c, BP.pavingInner (intSetN n))
-    | l <= n && n <= u =
-        (c, BP.pavingOuterUndecided (intSetLU l (n - 1)) (intSetLU n u)) -- deliberately sub-optimal
-    | otherwise =
-        (c, BP.pavingOuterUndecided (intSetLU l n) (intSetLU (n + 1) u)) -- deliberately sub-optimal
-  pruneBasicSet c@(IntTrue) (BasicIntSet l u) = (c, BP.pavingInner (intSetLU l u))
-  pruneBasicSet c@(IntFalse) (BasicIntSet l u) = (c, BP.pavingOuter (intSetLU l u))
+instance (Applicative m) => BP.CanPruneM m BasicIntSet IntConstraint IntSet where
+  pruneBasicSetM c b = pure $ pruneBasicSet c b
 
-instance BP.IsPriorityQueue [(BasicIntSet, IntConstraint)] (BasicIntSet, IntConstraint) where
-  singletonQueue e = [e]
-  queueToList = id
-  queuePickNext [] = Nothing
-  queuePickNext (e : es) = Just (e, es)
-  queueAddMany = (++)
+pruneBasicSet :: IntConstraint -> BasicIntSet -> (IntConstraint, BP.Paving IntSet)
+pruneBasicSet c@(IntEq n) (BasicIntSet l u)
+  | l == n && n == u =
+      (c, BP.pavingInner (intSetN n))
+  | l <= n && n <= u =
+      (c, BP.pavingOuterUndecided (intSetLU l (n - 1)) (intSetLU n u)) -- deliberately sub-optimal
+  | l == u =
+      (c, BP.pavingOuter (intSetLU l u))
+  | otherwise -- n < l < u || l < u < n
+    =
+      (c, BP.pavingOuterUndecided (intSetLU l (l + 1)) (intSetLU (l + 2) u)) -- deliberately sub-optimal
+pruneBasicSet c@(IntTrue) (BasicIntSet l u) = (c, BP.pavingInner (intSetLU l u))
+pruneBasicSet c@(IntFalse) (BasicIntSet l u) = (c, BP.pavingOuter (intSetLU l u))
+
+newtype IntSetStack = IntSetStack [(BasicIntSet, IntConstraint)]
+
+instance BP.IsPriorityQueue IntSetStack (BasicIntSet, IntConstraint) where
+  singletonQueue e = IntSetStack [e]
+  queueToList (IntSetStack list) = list
+  queuePickNext (IntSetStack []) = Nothing
+  queuePickNext (IntSetStack (e : es)) = Just (e, IntSetStack es)
+  queueAddMany (IntSetStack es) new_es = IntSetStack (new_es ++ es)

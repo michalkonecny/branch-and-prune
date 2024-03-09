@@ -37,6 +37,8 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
+    , monad-logger
+    , text
   default-language: Haskell2010
 
 executable branch-and-prune-exe
@@ -52,6 +54,8 @@ executable branch-and-prune-exe
       base >=4.7 && <5
     , branch-and-prune
     , containers
+    , monad-logger
+    , text
   default-language: Haskell2010
 
 test-suite branch-and-prune-test
@@ -70,5 +74,7 @@ test-suite branch-and-prune-test
     , branch-and-prune
     , containers
     , hspec
+    , monad-logger
+    , text
   default-language: Haskell2010
   build-tool-depends: hspec-discover:hspec-discover == 2.*

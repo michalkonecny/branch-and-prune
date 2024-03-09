@@ -1,4 +1,5 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -11,7 +12,7 @@
 module BranchAndPrune
   ( IsSet (..),
     SetFromBasic (..),
-    CanPrune (..),
+    CanPruneM (..),
     CanSplitSet (..),
     Paving (..),
     pavingInner,
@@ -20,10 +21,20 @@ module BranchAndPrune
     pavingInnerUndecided,
     pavingOuterUndecided,
     IsPriorityQueue (..),
-    Params (..),
-    branchAndPrune,
+    ParamsM (..),
+    branchAndPruneM,
   )
 where
+
+import Control.Monad.Logger (MonadLogger, logDebugN)
+import qualified Data.Text as T
+import Text.Printf (printf)
+
+-- The following wrapper supports the use of "printf" to format log messages.
+-- It also reduced the need for OverloadedStrings.
+-- OverloadedStrings is not sufficient to get `printf` to work with the logger functions.
+logDebugStr :: (MonadLogger m) => String -> m ()
+logDebugStr = logDebugN . T.pack
 
 class IsSet set where
   emptySet :: set
@@ -36,8 +47,8 @@ class SetFromBasic basicSet set where
 class CanSplitSet basicSet set where
   splitSet :: set -> [basicSet]
 
-class CanPrune basicSet constraint set where
-  pruneBasicSet :: constraint -> basicSet -> (constraint, Paving set)
+class CanPruneM m basicSet constraint set where
+  pruneBasicSetM :: constraint -> basicSet -> m (constraint, Paving set)
 
 class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   singletonQueue :: elem -> priorityQueue
@@ -82,45 +93,60 @@ pavingInnerUndecided inner undecided = Paving {inner, undecided, outer = emptySe
 pavingOuterUndecided :: (IsSet set) => set -> set -> Paving set
 pavingOuterUndecided outer undecided = Paving {inner = emptySet, undecided, outer}
 
-data Params basicSet set priorityQueue constraint = Params
+data ParamsM m basicSet set priorityQueue constraint = ParamsM
   { scope :: basicSet,
     constraint :: constraint,
     goalReached :: Paving set -> Bool,
     shouldGiveUpOnSet :: set -> Bool,
-    dummyPriorityQueue :: priorityQueue
+    dummyPriorityQueue :: priorityQueue,
+    dummyMaction :: m ()
   }
 
-branchAndPrune ::
+branchAndPruneM ::
   ( IsSet set,
     SetFromBasic basicSet set,
     CanSplitSet basicSet set,
-    CanPrune basicSet constraint set,
-    IsPriorityQueue priorityQueue (basicSet, constraint)
+    CanPruneM m basicSet constraint set,
+    IsPriorityQueue priorityQueue (basicSet, constraint),
+    MonadLogger m,
+    Show set,
+    Show basicSet,
+    Show constraint
   ) =>
-  Params basicSet set priorityQueue constraint ->
-  Paving set
-branchAndPrune (Params {..} :: Params basicSet set priorityQueue constraint) =
-  let initQueue = singletonQueue (scope, constraint)
-      _d = [initQueue, dummyPriorityQueue] -- help type inference
+  ParamsM m basicSet set priorityQueue constraint ->
+  m (Paving set)
+branchAndPruneM (ParamsM {..} :: ParamsM m basicSet set priorityQueue constraint) =
+  let initQueue = singletonQueue (scope, constraint) :: priorityQueue
    in step emptyPaving initQueue
   where
-    step :: Paving set -> priorityQueue -> Paving set
-    step pavingSoFar queue =
-      case queuePickNext queue of
-        Nothing -> pavingSoFar
-        Just ((b, c), queuePicked)
-          | not (goalReached pavingSoFar) ->
-              let (cPruned, prunePaving) = pruneBasicSet c b
-                  pavingAfterPruning = pavingSoFar `pavingAddDecided` prunePaving
-                  pavingWithPruningUndecided = pavingAfterPruning {undecided = pavingSoFar.undecided `setUnion` prunePaving.undecided}
-                  queueWithPruningUndecided = queuePicked `queueAddMany` (map (,cPruned) (splitSet prunePaving.undecided))
-               in if setIsEmpty prunePaving.undecided
-                    then step pavingAfterPruning queuePicked
-                    else
-                      if shouldGiveUpOnSet prunePaving.undecided
-                        then step pavingWithPruningUndecided queuePicked
-                        else step pavingAfterPruning queueWithPruningUndecided
-          | otherwise ->
-              let queueAsSet = fromBasicSets (map fst $ queueToList queue)
-               in pavingSoFar {undecided = pavingSoFar.undecided `setUnion` queueAsSet}
-  
+    step :: Paving set -> priorityQueue -> m (Paving set)
+    step pavingSoFar queue
+      | goalReached pavingSoFar = do
+          logDebugStr "Goal reached, finishing."
+          let queueAsSet = fromBasicSets (map fst $ queueToList queue)
+          pure $ pavingSoFar {undecided = pavingSoFar.undecided `setUnion` queueAsSet}
+      | otherwise =
+          case queuePickNext queue of
+            Nothing -> do
+              logDebugStr "The queue is empty, finishing."
+              pure pavingSoFar
+            Just ((b, c), queuePicked) -> do
+              logDebugStr $ printf "Picked set %s, constraint %s" (show b) (show c)
+              (cPruned, prunePaving) <- pruneBasicSetM c b
+              logDebugStr $ printf "Pruning result: paving %s, constraint %s" (show prunePaving) (show cPruned)
+              let pavingAfterPruning = pavingSoFar `pavingAddDecided` prunePaving
+              let pavingWithPruningUndecided = pavingAfterPruning {undecided = pavingSoFar.undecided `setUnion` prunePaving.undecided}
+              let pruneUndecidedSplit = splitSet prunePaving.undecided
+              let queueWithPruningUndecided = queuePicked `queueAddMany` (map (,cPruned) pruneUndecidedSplit)
+              if setIsEmpty prunePaving.undecided
+                then do
+                  logDebugStr $ printf "Fully solved on: %s" (show b)
+                  step pavingAfterPruning queuePicked
+                else
+                  if shouldGiveUpOnSet prunePaving.undecided
+                    then do
+                      logDebugStr $ printf "Leaving undecided on: %s" (show prunePaving.undecided)
+                      step pavingWithPruningUndecided queuePicked
+                    else do
+                      logDebugStr $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
+                      step pavingAfterPruning queueWithPruningUndecided
