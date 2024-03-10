@@ -16,6 +16,7 @@
 -- chiefly for testing and educational purposes.
 module IntSets
   ( IntSet (..),
+    intSet,
     intSetN,
     intSetLU,
     BasicIntSet (..),
@@ -68,6 +69,9 @@ instance BP.CanSplitSet BasicIntSet IntSet where
 
 data IntConstraint = IntEq Int | IntTrue | IntFalse -- \| IntNeq Int
   deriving (Eq, Show)
+
+intSet :: [Int] -> IntSet
+intSet ns = IntSet (Set.fromList ns)
 
 intSetLU :: Int -> Int -> IntSet
 intSetLU l u = IntSet (Set.fromList [l .. u])
