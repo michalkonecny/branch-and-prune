@@ -5,15 +5,15 @@
 module IntSetsSpec (spec) where
 
 import qualified BranchAndPrune as BP
-import Control.Monad.Logger (LoggingT, runStdoutLoggingT)
+import Control.Monad.Logger (runStdoutLoggingT)
 import IntSets
   ( BasicIntSet (BasicIntSet),
     IntConstraint (..),
-    IntSet (IntSet),
-    IntSetBPParams (..),
-    intSetBranchAndPrune,
+    IntSet (..),
     intSet,
     intSetN,
+    IntSetBPParams (..),
+    intSetBranchAndPrune,
   )
 import Test.Hspec
 
