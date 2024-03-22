@@ -87,12 +87,12 @@ pruneBasicSet c@(IntEq n) (BasicIntSet l u)
   | l == n && n == u =
       (c, BP.pavingInner (intSetN n))
   | l <= n && n <= u =
-      (c, BP.pavingOuterUndecided (intSetLU l (n - 1)) (intSetLU n u)) -- deliberately sub-optimal
+      (c, BP.pavingOuterUndecided (intSetLU l (n - 1)) (intSetLU n u)) -- deliberately sub-optimal pruning
   | l == u =
       (c, BP.pavingOuter (intSetLU l u))
   | otherwise -- n < l < u || l < u < n
     =
-      (c, BP.pavingOuterUndecided (intSetLU l (l + 1)) (intSetLU (l + 2) u)) -- deliberately sub-optimal
+      (IntFalse, BP.pavingUndecided (intSetLU l u)) -- no pruning but simplifying the constraint
 pruneBasicSet c@(IntTrue) (BasicIntSet l u) = (c, BP.pavingInner (intSetLU l u))
 pruneBasicSet c@(IntFalse) (BasicIntSet l u) = (c, BP.pavingOuter (intSetLU l u))
 

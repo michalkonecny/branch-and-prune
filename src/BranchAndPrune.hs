@@ -17,6 +17,7 @@ module BranchAndPrune
     Paving (..),
     pavingInner,
     pavingOuter,
+    pavingUndecided,
     pavingInnerOuter,
     pavingInnerUndecided,
     pavingOuterUndecided,
@@ -45,7 +46,7 @@ class SetFromBasic basicSet set where
   fromBasicSets :: [basicSet] -> set
 
 class CanSplitSet basicSet set where
-  splitSet :: set -> [basicSet]
+  splitSet :: set -> [basicSet] -- at least two so that B&P makes progress
 
 class CanPruneM m basicSet constraint set where
   pruneBasicSetM :: constraint -> basicSet -> m (constraint, Paving set)
@@ -83,6 +84,9 @@ pavingInner inner = Paving {inner, undecided = emptySet, outer = emptySet}
 
 pavingOuter :: (IsSet set) => set -> Paving set
 pavingOuter outer = Paving {inner = emptySet, undecided = emptySet, outer}
+
+pavingUndecided :: (IsSet set) => set -> Paving set
+pavingUndecided undecided = Paving {undecided, inner = emptySet, outer = emptySet}
 
 pavingInnerOuter :: (IsSet set) => set -> set -> Paving set
 pavingInnerOuter inner outer = Paving {inner, undecided = emptySet, outer}
