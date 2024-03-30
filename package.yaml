@@ -25,6 +25,8 @@ dependencies:
 - containers
 - monad-logger
 - text
+- mixed-types-num
+- aern2-mp
 
 ghc-options:
 - -Wall
