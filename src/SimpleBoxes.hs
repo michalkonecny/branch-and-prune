@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- |
 -- This module impements very simple constraints over sets of integers and
@@ -39,19 +40,28 @@ import qualified AERN2.MP as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
 import qualified BranchAndPrune as BP
 import Control.Monad.Logger (MonadLogger)
+import Data.List (sortOn)
+import qualified Data.List as List
 import qualified Data.Map as Map
 import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import qualified Prelude as P
-import Data.List (sortOn)
 
 {- N-dimensional Boxes -}
 
 type Var = String
 
-data Box = Box {varDomains :: Map.Map Var MP.MPBall, splitOrder :: [Var]} 
-  deriving (Show)
+data Box = Box {varDomains :: Map.Map Var MP.MPBall, splitOrder :: [Var]}
+
+instance Show Box where
+  show (Box {..}) =
+    printf "[%s]" $ List.intercalate ", " $ map showVarDom $ Map.toList varDomains
+    where
+      showVarDom :: (Var, MPBall) -> String
+      showVarDom (var, ball) = printf "%s ∈ [%s..%s]" var (show (double l)) (show (double u))
+        where
+          (l, u) = MP.endpoints ball
 
 instance P.Eq Box where
   b1 == b2 = varDomainsR b1 == varDomainsR b2
@@ -74,7 +84,6 @@ mkBox varDomainsRational =
       where
         mR = (lR + uR) / 2
         rR = (uR - lR) / 2
-
 
 boxGetVarDomain :: Box -> Var -> MP.MPBall
 boxGetVarDomain (Box {..}) var =
@@ -210,8 +219,20 @@ instance BP.IsPriorityQueue BoxStack (Box, Form) where
 
 data BoxBPParams = BoxBPParams
   { scope :: Box,
-    constraint :: Form
+    constraint :: Form,
+    giveUpAccuracy :: Rational
   }
+
+shouldGiveUpOnSet :: Rational -> Boxes -> Bool
+shouldGiveUpOnSet giveUpAccuracy (Boxes boxes) =
+  all giveUpOnBox boxes
+  where
+    giveUpOnBox :: Box -> Bool
+    giveUpOnBox (Box {..}) = all smallerThanPrec (Map.elems varDomains)
+    smallerThanPrec :: MPBall -> Bool
+    smallerThanPrec ball = diameter <= giveUpAccuracy
+      where
+        diameter = 2 * (MP.radius ball)
 
 boxBranchAndPrune :: (MonadLogger m) => BoxBPParams -> m (BP.Paving Boxes)
 boxBranchAndPrune (BoxBPParams {..}) =
@@ -220,7 +241,7 @@ boxBranchAndPrune (BoxBPParams {..}) =
         { BP.scope,
           BP.constraint,
           BP.goalReached = (\_ -> False) :: BP.Paving Boxes -> Bool,
-          BP.shouldGiveUpOnSet = (\_ -> False) :: Boxes -> Bool,
+          BP.shouldGiveUpOnSet = (shouldGiveUpOnSet giveUpAccuracy) :: Boxes -> Bool,
           BP.dummyPriorityQueue,
           BP.dummyMaction = pure ()
         }
