@@ -40,6 +40,7 @@ logDebugStr = logDebugN . T.pack
 class IsSet set where
   emptySet :: set
   setIsEmpty :: set -> Bool
+  setShowStats :: set -> String
   setUnion :: set -> set -> set
 
 class SetFromBasic basicSet set where
@@ -63,6 +64,10 @@ data Paving set = Paving
     outer :: set
   }
   deriving (Eq, Show)
+
+showPavingStats :: (IsSet set) => Paving set -> String
+showPavingStats (Paving {..}) = 
+  printf "{|inner| = %s, |undecided| = %s, |outer| = %s}" (setShowStats inner) (setShowStats undecided) (setShowStats outer)
 
 emptyPaving :: (IsSet set) => Paving set
 emptyPaving =
@@ -133,6 +138,7 @@ branchAndPruneM (ParamsM {..} :: ParamsM m basicSet set priorityQueue constraint
           case queuePickNext queue of
             Nothing -> do
               logDebugStr "The queue is empty, finishing."
+              logDebugStr $ printf "Paving stats: %s" (showPavingStats pavingSoFar)
               pure pavingSoFar
             Just ((b, c), queuePicked) -> do
               logDebugStr $ printf "Picked set %s, constraint %s" (show b) (show c)

@@ -48,6 +48,7 @@ import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import qualified Prelude as P
+import AERN2.MP.Dyadic (dyadic)
 
 {- N-dimensional Boxes -}
 
@@ -92,12 +93,17 @@ boxGetVarDomain (Box {..}) var =
     Nothing -> error $ printf "variable %s not present in box %s" var (show varDomains)
     Just dom -> dom
 
+boxAreaD :: Box -> Double
+boxAreaD (Box {..}) = product (map (double . dyadic . MP.radius) (Map.elems varDomains))
+
 newtype Boxes = Boxes {boxes :: [Box]} deriving (P.Eq, Show)
 
 instance BP.IsSet Boxes where
   emptySet = Boxes []
   setIsEmpty (Boxes boxes) = null boxes
   setUnion (Boxes boxes1) (Boxes boxes2) = Boxes (boxes1 ++ boxes2)
+  setShowStats (Boxes boxes) = 
+    printf "{|boxes| = %d, area = %3.2f}" (length boxes) (sum (map boxAreaD boxes))
 
 instance BP.SetFromBasic Box Boxes where
   fromBasicSets = Boxes

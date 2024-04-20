@@ -37,6 +37,7 @@ instance BP.IsSet IntSet where
   emptySet = IntSet Set.empty
   setIsEmpty (IntSet set) = Set.null set
   setUnion (IntSet set1) (IntSet set2) = IntSet (Set.union set1 set2)
+  setShowStats (IntSet set) = show (Set.size set)  
 
 data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int} deriving (Eq, Show)
 
