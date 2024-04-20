@@ -75,6 +75,9 @@ varDomainsR b = sortOn fst $ map fromBall (Map.toList b.varDomains)
       where
         (lR, uR) = MP.endpoints ball
 
+instance MP.HasPrecision Box where
+  getPrecision (Box {..}) = MP.defaultPrecision -- TODO : use precision from varDomains if possible
+
 mkBox :: [(Var, (Rational, Rational))] -> Box
 mkBox varDomainsRational =
   Box
@@ -134,7 +137,7 @@ splitMPBall :: MPBall -> (MPBall, MPBall)
 splitMPBall b = (bL, bU)
   where
     (l, u) = mpBallEndpoints b
-    m = (l + u) / 2
+    m = (l + u) / 2 -- TODO: adjust precision if needed to get the exact middle
     bL = fromMPBallEndpoints l m
     bU = fromMPBallEndpoints m u
 

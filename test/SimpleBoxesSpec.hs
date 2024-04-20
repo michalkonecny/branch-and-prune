@@ -14,7 +14,7 @@ import GHC.Records
 
 import SimpleBoxes
   ( Var,
-    Box,
+    Box(..),
     BoxBPParams (..),
     Boxes (..),
     Expr (..),
@@ -49,7 +49,9 @@ exprVar :: Var -> Expr
 exprVar var = Expr {eval = \b -> boxGetVarDomain b var, description = var}
 
 exprLit :: Rational -> Expr
-exprLit c = Expr {eval = \_ -> MP.mpBall (c, 0), description = show (double c)}
+exprLit c = Expr {eval, description = show (double c)}
+  where
+    eval box = MP.mpBallP (MP.getPrecision box) c
 
 exprSum :: Expr -> Expr -> Expr
 exprSum (Expr eval1 desc1) (Expr eval2 desc2) =
@@ -94,6 +96,6 @@ spec = do
           >>= (`shouldSatisfy` ( \ paving -> null paving.outer.boxes && null paving.undecided.boxes ))
     it "solves (x+0.5 <= y /\\ y <= z ==> x <= z) over scope {x: [0,2], y: [0,2], z: [0,2]} with give-up accuracy 0.125"
       $ do
-        runBP 0.125 (mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))])
-          ((((exprSum x (exprLit 0.5)) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z))
+        runBP 0.01 (mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))])
+          ((((exprSum x (exprLit 0.3)) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z))
           >>= (`shouldSatisfy` ( \ paving -> null paving.outer.boxes && null paving.undecided.boxes ))
