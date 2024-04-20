@@ -94,8 +94,8 @@ spec = do
         runBP 0.25 (mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))])
           (((exprSum x (exprLit 1.0)) `formLeq` y) `formImpl` (x `formLeq` y))
           >>= (`shouldSatisfy` ( \ paving -> null paving.outer.boxes && null paving.undecided.boxes ))
-    it "solves (x+0.5 <= y /\\ y <= z ==> x <= z) over scope {x: [0,2], y: [0,2], z: [0,2]} with give-up accuracy 0.125"
+    it "solves (x+0.1 <= y /\\ y <= z ==> x <= z) over scope {x: [0,2], y: [0,2], z: [0,2]} with give-up accuracy 0.01"
       $ do
         runBP 0.01 (mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))])
-          ((((exprSum x (exprLit 0.3)) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z))
+          ((((exprSum x (exprLit 0.1)) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z))
           >>= (`shouldSatisfy` ( \ paving -> null paving.outer.boxes && null paving.undecided.boxes ))
