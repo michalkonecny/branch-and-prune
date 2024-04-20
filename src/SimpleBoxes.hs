@@ -20,7 +20,8 @@
 -- algorithm in a very simple concrete context,
 -- chiefly for testing and educational purposes.
 module SimpleBoxes
-  ( Box (..),
+  ( Var,
+    Box (..),
     mkBox,
     boxGetVarDomain,
     Boxes (..),
@@ -91,7 +92,7 @@ boxGetVarDomain (Box {..}) var =
     Nothing -> error $ printf "variable %s not present in box %s" var (show varDomains)
     Just dom -> dom
 
-newtype Boxes = Boxes [Box] deriving (P.Eq, Show)
+newtype Boxes = Boxes {boxes :: [Box]} deriving (P.Eq, Show)
 
 instance BP.IsSet Boxes where
   emptySet = Boxes []
@@ -152,13 +153,24 @@ instance P.Eq Expr where
 --   | ExpBinary BinaryOp Exp Exp
 
 data BinaryComp = CompLeq
-  deriving (P.Eq, Show)
+  deriving (P.Eq)
+
+instance Show BinaryComp where
+  show CompLeq = "<="
 
 data UnaryConn = ConnNeg
-  deriving (P.Eq, Show)
+  deriving (P.Eq)
 
-data BinaryConn = ConnAnd | ConnOr
-  deriving (P.Eq, Show)
+instance Show UnaryConn where
+  show ConnNeg = "¬"
+
+data BinaryConn = ConnAnd | ConnOr | ConnImpl
+  deriving (P.Eq)
+
+instance Show BinaryConn where
+  show ConnAnd = "∧"
+  show ConnOr = "∨"
+  show ConnImpl = "⇒"
 
 data Form
   = FormComp BinaryComp Expr Expr
@@ -166,7 +178,14 @@ data Form
   | FormBinary BinaryConn Form Form
   | FormTrue
   | FormFalse
-  deriving (P.Eq, Show)
+  deriving (P.Eq)
+
+instance Show Form where
+  show (FormComp comp l r) = printf "%s %s %s" (show l) (show comp) (show r)
+  show (FormUnary op l) = printf "%s (%s)" (show op) (show l)
+  show (FormBinary op l r) = printf "(%s) %s (%s)" (show l) (show op) (show r)
+  show FormTrue = "True"
+  show FormFalse = "False"
 
 instance (Applicative m) => BP.CanPruneM m Box Form Boxes where
   pruneBasicSetM c b = pure (cP, pavingP)
@@ -205,6 +224,13 @@ simplifyOnBox box = simplify
         (FormFalse, simplifiedF2) -> simplifiedF2
         (simplifiedF1, FormFalse) -> simplifiedF1
         (simplifiedF1, simplifiedF2) -> FormBinary ConnOr simplifiedF1 simplifiedF2
+    simplify (FormBinary ConnImpl f1 f2) =
+      case (simplify f1, simplify f2) of
+        (FormFalse, _) -> FormTrue
+        (_, FormTrue) -> FormTrue
+        (FormTrue, simplifiedF2) -> simplifiedF2
+        (simplifiedF1, FormFalse) -> FormUnary ConnNeg simplifiedF1
+        (simplifiedF1, simplifiedF2) -> FormBinary ConnImpl simplifiedF1 simplifiedF2
     simplify FormTrue = FormTrue
     simplify FormFalse = FormFalse
 
