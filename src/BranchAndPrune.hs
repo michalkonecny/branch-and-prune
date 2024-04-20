@@ -22,6 +22,7 @@ module BranchAndPrune
     pavingInnerUndecided,
     pavingOuterUndecided,
     IsPriorityQueue (..),
+    CanSplitQueue(..),
     ParamsM (..),
     branchAndPruneM,
   )
@@ -42,6 +43,7 @@ class IsSet set where
   setIsEmpty :: set -> Bool
   setShowStats :: set -> String
   setUnion :: set -> set -> set
+  setMinus :: set -> set -> set
 
 class SetFromBasic basicSet set where
   fromBasicSets :: [basicSet] -> set
@@ -57,6 +59,9 @@ class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   queueToList :: priorityQueue -> [elem]
   queuePickNext :: priorityQueue -> Maybe (elem, priorityQueue)
   queueAddMany :: priorityQueue -> [elem] -> priorityQueue
+
+class CanSplitQueue priorityQueue where 
+  queueSplit :: priorityQueue -> [priorityQueue]
 
 data Paving set = Paving
   { inner :: set,
@@ -107,6 +112,7 @@ data ParamsM m basicSet set priorityQueue constraint = ParamsM
     constraint :: constraint,
     goalReached :: Paving set -> Bool,
     shouldGiveUpOnSet :: set -> Bool,
+    maxForkDepth :: Int, 
     dummyPriorityQueue :: priorityQueue,
     dummyMaction :: m ()
   }
@@ -117,6 +123,7 @@ branchAndPruneM ::
     CanSplitSet basicSet set,
     CanPruneM m basicSet constraint set,
     IsPriorityQueue priorityQueue (basicSet, constraint),
+    CanSplitQueue priorityQueue,
     MonadLogger m,
     Show set,
     Show basicSet,
@@ -126,20 +133,22 @@ branchAndPruneM ::
   m (Paving set)
 branchAndPruneM (ParamsM {..} :: ParamsM m basicSet set priorityQueue constraint) =
   let initQueue = singletonQueue (scope, constraint) :: priorityQueue
-   in step emptyPaving initQueue
+   in do
+    (finalPaving, finalQueue) <- step 0 emptyPaving initQueue
+    let queueAsSet = fromBasicSets (map fst $ queueToList finalQueue)
+    pure $ finalPaving {undecided = finalPaving.undecided `setUnion` queueAsSet}
   where
-    step :: Paving set -> priorityQueue -> m (Paving set)
-    step pavingSoFar queue
+    step :: Int -> Paving set -> priorityQueue -> m (Paving set, priorityQueue)
+    step forkDepth pavingSoFar queue
       | goalReached pavingSoFar = do
           logDebugStr "Goal reached, finishing."
-          let queueAsSet = fromBasicSets (map fst $ queueToList queue)
-          pure $ pavingSoFar {undecided = pavingSoFar.undecided `setUnion` queueAsSet}
+          pure (pavingSoFar, queue)
       | otherwise =
           case queuePickNext queue of
             Nothing -> do
               logDebugStr "The queue is empty, finishing."
               logDebugStr $ printf "Paving stats: %s" (showPavingStats pavingSoFar)
-              pure pavingSoFar
+              pure (pavingSoFar, queue)
             Just ((b, c), queuePicked) -> do
               logDebugStr $ printf "Picked set %s, constraint %s" (show b) (show c)
               (cPruned, prunePaving) <- pruneBasicSetM c b
@@ -151,12 +160,13 @@ branchAndPruneM (ParamsM {..} :: ParamsM m basicSet set priorityQueue constraint
               if setIsEmpty prunePaving.undecided
                 then do
                   logDebugStr $ printf "Fully solved on: %s" (show b)
-                  step pavingAfterPruning queuePicked
+                  step forkDepth pavingAfterPruning queuePicked
                 else
                   if shouldGiveUpOnSet prunePaving.undecided
                     then do
                       logDebugStr $ printf "Leaving undecided on: %s" (show prunePaving.undecided)
-                      step pavingWithPruningUndecided queuePicked
+                      step forkDepth pavingWithPruningUndecided queuePicked
                     else do
                       logDebugStr $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
-                      step pavingAfterPruning queueWithPruningUndecided
+                      -- TODO: parallelise
+                      step forkDepth pavingAfterPruning queueWithPruningUndecided

@@ -106,6 +106,9 @@ instance BP.IsPriorityQueue IntSetStack (BasicIntSet, IntConstraint) where
   queuePickNext (IntSetStack (e : es)) = Just (e, IntSetStack es)
   queueAddMany (IntSetStack es) new_es = IntSetStack (new_es ++ es)
 
+instance BP.CanSplitQueue IntSetStack where
+  queueSplit stack = [stack] -- TODO: do this properly
+
 data IntSetBPParams = IntSetBPParams
   { scope :: BasicIntSet,
     constraint :: IntConstraint
@@ -120,6 +123,7 @@ intSetBranchAndPrune (IntSetBPParams {..}) =
           BP.goalReached = (\_ -> False) :: BP.Paving IntSet -> Bool,
           BP.shouldGiveUpOnSet = (\_ -> False) :: IntSet -> Bool,
           BP.dummyPriorityQueue,
+          BP.maxForkDepth = 0,
           BP.dummyMaction = pure ()
         }
     )

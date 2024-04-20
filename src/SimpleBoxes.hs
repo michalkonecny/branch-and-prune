@@ -252,6 +252,9 @@ instance BP.IsPriorityQueue BoxStack (Box, Form) where
   queuePickNext (BoxStack (e : es)) = Just (e, BoxStack es)
   queueAddMany (BoxStack es) new_es = BoxStack (new_es ++ es)
 
+instance BP.CanSplitQueue BoxStack where
+  queueSplit stack = [stack] -- TODO: do this properly
+
 data BoxBPParams = BoxBPParams
   { scope :: Box,
     constraint :: Form,
@@ -278,6 +281,7 @@ boxBranchAndPrune (BoxBPParams {..}) =
           BP.goalReached = (\_ -> False) :: BP.Paving Boxes -> Bool,
           BP.shouldGiveUpOnSet = (shouldGiveUpOnSet giveUpAccuracy) :: Boxes -> Bool,
           BP.dummyPriorityQueue,
+          BP.maxForkDepth = int 0,
           BP.dummyMaction = pure ()
         }
     )
