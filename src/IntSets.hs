@@ -31,7 +31,6 @@ import qualified BranchAndPrune as BP
 import Control.Monad.Logger (MonadLogger)
 import qualified Data.Set as Set
 import Control.Monad.IO.Unlift (MonadUnliftIO)
-import BranchAndPrune (IsSet(setMinus))
 
 newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show)
 
@@ -39,7 +38,6 @@ instance BP.IsSet IntSet where
   emptySet = IntSet Set.empty
   setIsEmpty (IntSet set) = Set.null set
   setUnion (IntSet set1) (IntSet set2) = IntSet (Set.union set1 set2)
-  setMinus (IntSet set1) (IntSet set2) = IntSet (Set.difference set1 set2)
   setShowStats (IntSet set) = show (Set.size set)  
 
 data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int} deriving (Eq, Show)
@@ -108,8 +106,13 @@ instance BP.IsPriorityQueue IntSetStack (BasicIntSet, IntConstraint) where
   queuePickNext (IntSetStack []) = Nothing
   queuePickNext (IntSetStack (e : es)) = Just (e, IntSetStack es)
   queueAddMany (IntSetStack es) new_es = IntSetStack (new_es ++ es)
-  queueSplit stack = Nothing -- TODO: do this properly
-  queueMerge (IntSetStack stackL, IntSetStack stackR) = IntSetStack $ stackL ++ stackR
+  queueSplit (IntSetStack es)
+    | splitPoint == 0 = Nothing
+    | otherwise = Just (IntSetStack esL, IntSetStack esR)
+    where
+      splitPoint = (length es) `div` 2
+      (esL, esR) = splitAt splitPoint es
+  queueMerge (IntSetStack stackL) (IntSetStack stackR) = IntSetStack $ stackL ++ stackR
 
 data IntSetBPParams = IntSetBPParams
   { scope :: BasicIntSet,
@@ -125,7 +128,7 @@ intSetBranchAndPrune (IntSetBPParams {..}) =
           BP.shouldAbort = (\_ -> False) :: BP.Paving IntSet -> Bool,
           BP.shouldGiveUpOnBasicSet = (\_ -> False) :: BasicIntSet -> Bool,
           BP.dummyPriorityQueue,
-          BP.maxForkDepth = 0,
+          BP.maxForkDepth = 3,
           BP.dummyMaction = pure ()
         }
     )

@@ -106,7 +106,6 @@ instance BP.IsSet Boxes where
   emptySet = Boxes []
   setIsEmpty (Boxes boxes) = null boxes
   setUnion (Boxes boxes1) (Boxes boxes2) = Boxes (boxes1 ++ boxes2)
-  setMinus (Boxes set1) (Boxes set2) = Boxes set1 -- TODO: do it properly
   setShowStats (Boxes boxes) =
     printf "{|boxes| = %d, area = %3.2f}" (length boxes) (sum (map boxAreaD boxes))
 
@@ -253,8 +252,14 @@ instance BP.IsPriorityQueue BoxStack (Box, Form) where
   queuePickNext (BoxStack []) = Nothing
   queuePickNext (BoxStack (e : es)) = Just (e, BoxStack es)
   queueAddMany (BoxStack es) new_es = BoxStack (new_es ++ es)
-  queueSplit stack = Nothing -- TODO: do this properly
-  queueMerge (BoxStack stackL, BoxStack stackR) = BoxStack $ stackL ++ stackR
+  queueSplit (BoxStack es)
+    | splitPoint == 0 = Nothing
+    | otherwise = Just (BoxStack esL, BoxStack esR)
+    where
+      splitPoint = (length es) `divI` 2
+      (esL, esR) = splitAt splitPoint es
+
+  queueMerge (BoxStack stackL) (BoxStack stackR) = BoxStack $ stackL ++ stackR
 
 data BoxBPParams = BoxBPParams
   { scope :: Box,
@@ -280,7 +285,7 @@ boxBranchAndPrune (BoxBPParams {..}) =
           BP.shouldAbort = (\_ -> False) :: BP.Paving Boxes -> Bool,
           BP.shouldGiveUpOnBasicSet = (shouldGiveUpOnBox giveUpAccuracy) :: Box -> Bool,
           BP.dummyPriorityQueue,
-          BP.maxForkDepth = int 0,
+          BP.maxForkDepth = int 3,
           BP.dummyMaction = pure ()
         }
     )

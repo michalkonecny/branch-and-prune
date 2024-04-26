@@ -28,7 +28,6 @@ module BranchAndPrune
   )
 where
 
-import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO, UnliftIO (unliftIO))
 import Control.Monad.Logger (MonadLogger, logDebugN)
 import qualified Data.Text as T
@@ -45,7 +44,6 @@ class IsSet set where
   setIsEmpty :: set -> Bool
   setShowStats :: set -> String
   setUnion :: set -> set -> set
-  setMinus :: set -> set -> set
 
 class SetFromBasic basicSet set where
   fromBasicSets :: [basicSet] -> set
@@ -62,7 +60,7 @@ class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   queuePickNext :: priorityQueue -> Maybe (elem, priorityQueue)
   queueAddMany :: priorityQueue -> [elem] -> priorityQueue
   queueSplit :: priorityQueue -> Maybe (priorityQueue, priorityQueue)
-  queueMerge :: (priorityQueue, priorityQueue) -> priorityQueue
+  queueMerge :: priorityQueue -> priorityQueue -> priorityQueue
 
 data Paving set = Paving
   { inner :: set,
@@ -81,6 +79,14 @@ emptyPaving =
     { inner = emptySet,
       undecided = emptySet,
       outer = emptySet
+    }
+
+pavingMerge :: (IsSet set) => Paving set -> Paving set -> Paving set
+pavingMerge paving1 paving2 =
+  paving1
+    { inner = paving1.inner `setUnion` paving2.inner,
+      undecided = paving1.undecided `setUnion` paving2.undecided,
+      outer = paving1.outer `setUnion` paving2.outer
     }
 
 pavingAddDecided :: (IsSet set) => Paving set -> Paving set -> Paving set
@@ -123,6 +129,22 @@ data Result set priorityQueue = Result
     queue :: priorityQueue
   }
 
+mergeResults ::
+  (IsSet set, IsPriorityQueue priorityQueue elem0) =>
+  Result set priorityQueue ->
+  Result set priorityQueue ->
+  Result set priorityQueue
+mergeResults (Result pavingL queueL) (Result pavingR queueR) =
+  Result (pavingL `pavingMerge` pavingR) (queueL `queueMerge` queueR)
+
+baseResultOnPrevPaving ::
+  (IsSet set) =>
+  Paving set ->
+  Result set priorityQueue ->
+  Result set priorityQueue
+baseResultOnPrevPaving prevPaving (Result paving queue) =
+  Result (prevPaving `pavingMerge` paving) queue
+
 branchAndPruneM ::
   ( IsSet set,
     SetFromBasic basicSet set,
@@ -131,7 +153,6 @@ branchAndPruneM ::
     IsPriorityQueue priorityQueue (basicSet, constraint),
     MonadLogger m,
     MonadUnliftIO m,
-    Show set,
     Show basicSet,
     Show constraint
   ) =>
@@ -192,18 +213,24 @@ branchAndPruneM (ParamsM {..} :: Params m basicSet set priorityQueue constraint)
                       else do
                         -- not done on b
                         let pruneUndecidedSplit = splitSet prunePaving.undecided
+                        logDebugStr $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
                         let queueWithPruningUndecided = queuePicked `queueAddMany` (map (,cPruned) pruneUndecidedSplit)
                         case queueSplit queueWithPruningUndecided of
                           Just (queueL, queueR) | forkDepth < maxForkDepth ->
                             do
-                              logDebugStr "Forking into two concurrent threads and waiting for them to finish"
-                              forkAndMerge $ map (step forkDepth emptyPaving) [queueL, queueR]
+                              logDebugStr "Forking queue into two queues to process independently"
+                              let compL = step (forkDepth + 1) emptyPaving queueL
+                              let compR = step (forkDepth + 1) emptyPaving queueR
+                              result <- forkAndMerge compL compR
+                              pure $ baseResultOnPrevPaving pavingWithPruningDecided result
                           _ ->
                             do
-                              logDebugStr $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
                               step forkDepth pavingWithPruningDecided queueWithPruningUndecided
 
-    forkAndMerge :: [m (Result set priorityQueue)] -> m (Result set priorityQueue)
-    forkAndMerge segmentComputations =
+    forkAndMerge :: m (Result set priorityQueue) -> m (Result set priorityQueue) -> m (Result set priorityQueue)
+    forkAndMerge compL compR =
       do
-        undefined -- TODO
+        -- TODO: parallise
+        resultL <- compL
+        resultR <- compR
+        pure $ mergeResults resultL resultR
