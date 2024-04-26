@@ -30,6 +30,8 @@ where
 import qualified BranchAndPrune as BP
 import Control.Monad.Logger (MonadLogger)
 import qualified Data.Set as Set
+import Control.Monad.IO.Unlift (MonadUnliftIO)
+import BranchAndPrune (IsSet(setMinus))
 
 newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show)
 
@@ -37,6 +39,7 @@ instance BP.IsSet IntSet where
   emptySet = IntSet Set.empty
   setIsEmpty (IntSet set) = Set.null set
   setUnion (IntSet set1) (IntSet set2) = IntSet (Set.union set1 set2)
+  setMinus (IntSet set1) (IntSet set2) = IntSet (Set.difference set1 set2)
   setShowStats (IntSet set) = show (Set.size set)  
 
 data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int} deriving (Eq, Show)
@@ -80,7 +83,7 @@ intSetLU l u = IntSet (Set.fromList [l .. u])
 intSetN :: Int -> IntSet
 intSetN n = IntSet (Set.singleton n)
 
-instance (Applicative m) => BP.CanPruneM m BasicIntSet IntConstraint IntSet where
+instance (Applicative m) => BP.CanPrune m BasicIntSet IntConstraint IntSet where
   pruneBasicSetM c b = pure $ pruneBasicSet c b
 
 pruneBasicSet :: IntConstraint -> BasicIntSet -> (IntConstraint, BP.Paving IntSet)
@@ -105,23 +108,22 @@ instance BP.IsPriorityQueue IntSetStack (BasicIntSet, IntConstraint) where
   queuePickNext (IntSetStack []) = Nothing
   queuePickNext (IntSetStack (e : es)) = Just (e, IntSetStack es)
   queueAddMany (IntSetStack es) new_es = IntSetStack (new_es ++ es)
-
-instance BP.CanSplitQueue IntSetStack where
-  queueSplit stack = [stack] -- TODO: do this properly
+  queueSplit stack = Nothing -- TODO: do this properly
+  queueMerge (IntSetStack stackL, IntSetStack stackR) = IntSetStack $ stackL ++ stackR
 
 data IntSetBPParams = IntSetBPParams
   { scope :: BasicIntSet,
     constraint :: IntConstraint
   }
 
-intSetBranchAndPrune :: (MonadLogger m) => IntSetBPParams -> m (BP.Paving IntSet)
+intSetBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => IntSetBPParams -> m (BP.Result IntSet IntSetStack)
 intSetBranchAndPrune (IntSetBPParams {..}) =
   BP.branchAndPruneM
     ( BP.ParamsM
         { BP.scope,
           BP.constraint,
-          BP.goalReached = (\_ -> False) :: BP.Paving IntSet -> Bool,
-          BP.shouldGiveUpOnSet = (\_ -> False) :: IntSet -> Bool,
+          BP.shouldAbort = (\_ -> False) :: BP.Paving IntSet -> Bool,
+          BP.shouldGiveUpOnBasicSet = (\_ -> False) :: BasicIntSet -> Bool,
           BP.dummyPriorityQueue,
           BP.maxForkDepth = 0,
           BP.dummyMaction = pure ()

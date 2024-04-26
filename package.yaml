@@ -25,6 +25,7 @@ dependencies:
 - containers
 - monad-logger
 - text
+- unliftio-core
 - mixed-types-num
 - aern2-mp
 

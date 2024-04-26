@@ -1,40 +1,41 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 
 module SimpleBoxesSpec (spec) where
 
 import qualified AERN2.MP as MP
 import qualified BranchAndPrune as BP
 import Control.Monad.Logger (runStdoutLoggingT)
-import MixedTypesNumPrelude
+-- import qualified Prelude as P
 import GHC.Records
-
+import MixedTypesNumPrelude
 import SimpleBoxes
-  ( Var,
-    Box(..),
+  ( BinaryComp (..),
+    BinaryConn (..),
+    Box (..),
     BoxBPParams (..),
     Boxes (..),
     Expr (..),
     Form (..),
     UnaryConn (..),
-    BinaryComp (..),
-    BinaryConn (..),
+    Var,
     boxBranchAndPrune,
     boxGetVarDomain,
     mkBox,
   )
 import Test.Hspec
 import Text.Printf (printf)
-import qualified Prelude as P
 
 runBP :: Rational -> Box -> Form -> IO (BP.Paving Boxes)
 runBP giveUpAccuracy scope constraint =
-  runStdoutLoggingT
-    $ boxBranchAndPrune
-    $ BoxBPParams {..}
+  do
+    (BP.Result paving _) <-
+      runStdoutLoggingT
+        $ boxBranchAndPrune (BoxBPParams {scope, constraint, giveUpAccuracy})
+    pure paving
 
 x :: Expr
 x = exprVar "x"
@@ -85,8 +86,8 @@ spec = do
         runBP 0.25 (mkBox [("x", (-1.0, 1.0))]) (FormComp CompLeq (exprLit 0.0) x)
           `shouldReturn` ( BP.Paving
                              { inner = (BP.fromBasicSets [mkBox [("x", (0.0, 1.0))]]),
-                               outer = (BP.fromBasicSets [mkBox [("x", (-1.0, -0.5))], mkBox [("x", (-0.5, -0.25))]]),
-                               undecided = (BP.fromBasicSets [mkBox [("x", (-0.25, -0.0))]])
+                               outer = (BP.fromBasicSets [mkBox [("x", (-1.0, -0.5))]]),
+                               undecided = (BP.fromBasicSets [mkBox [("x", (-0.5, -0.25))], mkBox [("x", (-0.25, -0.0))]])
                              }
                          )
     it "solves (x+1 <= y ==> x <= y) over scope {x: [0,2], y: [0,2]} with give-up accuracy 0.25"

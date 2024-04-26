@@ -10,18 +10,20 @@ import IntSets
   ( BasicIntSet (BasicIntSet),
     IntConstraint (..),
     IntSet (..),
-    intSet,
-    intSetN,
     IntSetBPParams (..),
+    intSet,
     intSetBranchAndPrune,
+    intSetN,
   )
 import Test.Hspec
 
 runBP :: BasicIntSet -> IntConstraint -> IO (BP.Paving IntSet)
 runBP scope constraint =
-  runStdoutLoggingT $
-    intSetBranchAndPrune $
-      IntSetBPParams {..}
+  do
+    (BP.Result paving _) <-
+      runStdoutLoggingT $
+        intSetBranchAndPrune (IntSetBPParams {scope, constraint})
+    pure paving
 
 spec :: Spec
 spec = do
@@ -37,4 +39,4 @@ spec = do
     it "solves (=4) over scope {1,2,3}" $
       do
         runBP (BasicIntSet 1 3) (IntEq 4)
-          `shouldReturn` (BP.pavingOuter (intSet [1..3]))
+          `shouldReturn` (BP.pavingOuter (intSet [1 .. 3]))

@@ -39,7 +39,9 @@ where
 import AERN2.MP (Kleenean (..), MPBall)
 import qualified AERN2.MP as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
+import AERN2.MP.Dyadic (dyadic)
 import qualified BranchAndPrune as BP
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.List (sortOn)
 import qualified Data.List as List
@@ -48,7 +50,6 @@ import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import qualified Prelude as P
-import AERN2.MP.Dyadic (dyadic)
 
 {- N-dimensional Boxes -}
 
@@ -105,7 +106,8 @@ instance BP.IsSet Boxes where
   emptySet = Boxes []
   setIsEmpty (Boxes boxes) = null boxes
   setUnion (Boxes boxes1) (Boxes boxes2) = Boxes (boxes1 ++ boxes2)
-  setShowStats (Boxes boxes) = 
+  setMinus (Boxes set1) (Boxes set2) = Boxes set1 -- TODO: do it properly
+  setShowStats (Boxes boxes) =
     printf "{|boxes| = %d, area = %3.2f}" (length boxes) (sum (map boxAreaD boxes))
 
 instance BP.SetFromBasic Box Boxes where
@@ -196,7 +198,7 @@ instance Show Form where
   show FormTrue = "True"
   show FormFalse = "False"
 
-instance (Applicative m) => BP.CanPruneM m Box Form Boxes where
+instance (Applicative m) => BP.CanPrune m Box Form Boxes where
   pruneBasicSetM c b = pure (cP, pavingP)
     where
       cP = simplifyOnBox b c
@@ -251,9 +253,8 @@ instance BP.IsPriorityQueue BoxStack (Box, Form) where
   queuePickNext (BoxStack []) = Nothing
   queuePickNext (BoxStack (e : es)) = Just (e, BoxStack es)
   queueAddMany (BoxStack es) new_es = BoxStack (new_es ++ es)
-
-instance BP.CanSplitQueue BoxStack where
-  queueSplit stack = [stack] -- TODO: do this properly
+  queueSplit stack = Nothing -- TODO: do this properly
+  queueMerge (BoxStack stackL, BoxStack stackR) = BoxStack $ stackL ++ stackR
 
 data BoxBPParams = BoxBPParams
   { scope :: Box,
@@ -261,25 +262,23 @@ data BoxBPParams = BoxBPParams
     giveUpAccuracy :: Rational
   }
 
-shouldGiveUpOnSet :: Rational -> Boxes -> Bool
-shouldGiveUpOnSet giveUpAccuracy (Boxes boxes) =
-  all giveUpOnBox boxes
+shouldGiveUpOnBox :: Rational -> Box -> Bool
+shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
+  all smallerThanPrec (Map.elems varDomains)
   where
-    giveUpOnBox :: Box -> Bool
-    giveUpOnBox (Box {..}) = all smallerThanPrec (Map.elems varDomains)
     smallerThanPrec :: MPBall -> Bool
     smallerThanPrec ball = diameter <= giveUpAccuracy
       where
         diameter = 2 * (MP.radius ball)
 
-boxBranchAndPrune :: (MonadLogger m) => BoxBPParams -> m (BP.Paving Boxes)
+boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => BoxBPParams -> m (BP.Result Boxes BoxStack)
 boxBranchAndPrune (BoxBPParams {..}) =
   BP.branchAndPruneM
     ( BP.ParamsM
         { BP.scope,
           BP.constraint,
-          BP.goalReached = (\_ -> False) :: BP.Paving Boxes -> Bool,
-          BP.shouldGiveUpOnSet = (shouldGiveUpOnSet giveUpAccuracy) :: Boxes -> Bool,
+          BP.shouldAbort = (\_ -> False) :: BP.Paving Boxes -> Bool,
+          BP.shouldGiveUpOnBasicSet = (shouldGiveUpOnBox giveUpAccuracy) :: Box -> Bool,
           BP.dummyPriorityQueue,
           BP.maxForkDepth = int 0,
           BP.dummyMaction = pure ()
