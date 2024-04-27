@@ -28,10 +28,14 @@ module BranchAndPrune
   )
 where
 
-import Control.Monad.IO.Unlift (MonadUnliftIO, UnliftIO (unliftIO))
+import Control.Concurrent (forkIO, killThread, yield)
+import Control.Concurrent.STM (atomically, newTVar, readTVar, retry, writeTVar)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Unlift (MonadUnliftIO, toIO)
 import Control.Monad.Logger (MonadLogger, logDebugN)
 import qualified Data.Text as T
 import Text.Printf (printf)
+import GHC.Conc (numCapabilities)
 
 -- The following wrapper supports the use of "printf" to format log messages.
 -- It also reduced the need for OverloadedStrings.
@@ -129,8 +133,19 @@ data Result set priorityQueue = Result
     queue :: priorityQueue
   }
 
+-- TODO: add ResultAbort with a paving 
+
+resultIsAborted ::
+  (IsPriorityQueue priorityQueue elem) =>
+  Result set priorityQueue ->
+  Bool
+resultIsAborted result =
+  case queuePickNext result.queue of
+    Nothing -> False
+    _ -> True
+
 mergeResults ::
-  (IsSet set, IsPriorityQueue priorityQueue elem0) =>
+  (IsSet set, IsPriorityQueue priorityQueue elem) =>
   Result set priorityQueue ->
   Result set priorityQueue ->
   Result set priorityQueue
@@ -160,6 +175,8 @@ branchAndPruneM ::
   m (Result set priorityQueue)
 branchAndPruneM (ParamsM {..} :: Params m basicSet set priorityQueue constraint) =
   do
+    liftIO $ do
+      printf "capabilities: %d\n" numCapabilities 
     logDebugStr "B&P process starting"
     result@(Result {paving, queue}) <- bpProcess
     logDebugStr "B&P process finishing"
@@ -175,62 +192,110 @@ branchAndPruneM (ParamsM {..} :: Params m basicSet set priorityQueue constraint)
         logDebugStr $ printf "Aborted around: %s" (show b)
     pure result
   where
-    bpProcess = step 0 emptyPaving initQueue
+    bpProcess = step 0 "Top" emptyPaving initQueue
       where
         initQueue = singletonQueue (scope, constraint)
-    step :: Int -> Paving set -> priorityQueue -> m (Result set priorityQueue)
-    step forkDepth pavingSoFar queue
+    step :: Int -> String -> Paving set -> priorityQueue -> m (Result set priorityQueue)
+    step forkDepth threadDescr pavingSoFar queue
       | shouldAbort pavingSoFar =
           do
-            logDebugStr "Stopping the B&P process."
+            logDebugThread "Stopping the B&P process."
             pure $ Result {paving = pavingSoFar, queue}
       | otherwise =
           case queuePickNext queue of
             Nothing ->
               do
-                logDebugStr "The queue is empty, finishing."
+                logDebugThread "The queue is empty, finishing."
                 pure $ Result {paving = pavingSoFar, queue}
             Just ((b, c), queuePicked) ->
               do
-                logDebugStr $ printf "Picked set %s, constraint %s" (show b) (show c)
+                logDebugThread $ printf "Picked set %s, constraint %s" (show b) (show c)
                 if shouldGiveUpOnBasicSet b
                   then do
-                    logDebugStr $ printf "Leaving undecided on: %s" (show b)
+                    logDebugThread $ printf "Leaving undecided on: %s" (show b)
                     let undecidedWithB = pavingSoFar.undecided `setUnion` (fromBasicSets [b])
                     let pavingWithB = pavingSoFar {undecided = undecidedWithB}
-                    step forkDepth pavingWithB queuePicked
+                    step forkDepth threadDescr pavingWithB queuePicked
                   else do
                     -- not giving up on b
-                    logDebugStr $ printf "Pruning on: %s" (show b)
+                    logDebugThread $ printf "Pruning on: %s" (show b)
                     (cPruned, prunePaving) <- pruneBasicSetM c b
                     --
                     let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
                     if setIsEmpty prunePaving.undecided
                       then do
                         -- done on b
-                        logDebugStr $ printf "Fully solved on: %s" (show b)
-                        step forkDepth pavingWithPruningDecided queuePicked
+                        logDebugThread $ printf "Fully solved on: %s" (show b)
+                        step forkDepth threadDescr pavingWithPruningDecided queuePicked
                       else do
                         -- not done on b
                         let pruneUndecidedSplit = splitSet prunePaving.undecided
-                        logDebugStr $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
+                        logDebugThread $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
                         let queueWithPruningUndecided = queuePicked `queueAddMany` (map (,cPruned) pruneUndecidedSplit)
                         case queueSplit queueWithPruningUndecided of
                           Just (queueL, queueR) | forkDepth < maxForkDepth ->
                             do
-                              logDebugStr "Forking queue into two queues to process independently"
-                              let compL = step (forkDepth + 1) emptyPaving queueL
-                              let compR = step (forkDepth + 1) emptyPaving queueR
+                              logDebugThread "Forking queue into two queues to process independently"
+                              let compL = step (forkDepth + 1) (threadDescr ++ ".L") emptyPaving queueL
+                              let compR = step (forkDepth + 1) (threadDescr ++ ".R") emptyPaving queueR
                               result <- forkAndMerge compL compR
                               pure $ baseResultOnPrevPaving pavingWithPruningDecided result
                           _ ->
                             do
-                              step forkDepth pavingWithPruningDecided queueWithPruningUndecided
-
+                              step forkDepth threadDescr pavingWithPruningDecided queueWithPruningUndecided
+      where
+        logDebugThread (s :: String) = do
+          logDebugStr $ "Thread " ++ threadDescr ++ ":" ++ s
+          pure () 
     forkAndMerge :: m (Result set priorityQueue) -> m (Result set priorityQueue) -> m (Result set priorityQueue)
     forkAndMerge compL compR =
       do
-        -- TODO: parallise
-        resultL <- compL
-        resultR <- compR
-        pure $ mergeResults resultL resultR
+        compL_IO <- toIO compL
+        compR_IO <- toIO compR
+        liftIO $
+          do
+            -- create shared variables for results:
+            resultL_Var <- atomically $ newTVar Nothing
+            resultR_Var <- atomically $ newTVar Nothing
+
+            -- create a shared variable for aborting the computation:
+            abort_Var <- atomically $ newTVar Nothing
+
+            -- fork the computations:
+            thread1 <- forkComp abort_Var resultL_Var compL_IO
+            thread2 <- forkComp abort_Var resultR_Var compR_IO
+
+            -- wait for either an abort or both threads to complete:
+            result <- atomically $ do
+              maybeAbortResult <- readTVar abort_Var
+              case maybeAbortResult of
+                Just result ->
+                  -- one of the threads aborted
+                  pure result -- pass on the aborted result
+                _ -> do
+                  maybeResultL <- readTVar resultL_Var
+                  maybeResultR <- readTVar resultR_Var
+                  case (maybeResultL, maybeResultR) of
+                    (Just resultL, Just resultR) ->
+                      -- both results available
+                      pure $ mergeResults resultL resultR -- merge the results
+                    _ ->
+                      retry -- continue waiting
+            -- kill threads if aborted
+            if resultIsAborted result then
+              do
+              killThread thread1
+              killThread thread2
+            else
+              pure ()
+
+            pure result
+      where
+        forkComp abort_Var result_Var comp_IO =
+          forkIO $
+            do
+              result <- comp_IO
+              atomically $
+                if resultIsAborted result
+                  then abort_Var `writeTVar` Just result
+                  else result_Var `writeTVar` Just result

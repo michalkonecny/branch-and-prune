@@ -264,6 +264,7 @@ instance BP.IsPriorityQueue BoxStack (Box, Form) where
 data BoxBPParams = BoxBPParams
   { scope :: Box,
     constraint :: Form,
+    maxForkDepth :: Int,
     giveUpAccuracy :: Rational
   }
 
@@ -285,7 +286,7 @@ boxBranchAndPrune (BoxBPParams {..}) =
           BP.shouldAbort = (\_ -> False) :: BP.Paving Boxes -> Bool,
           BP.shouldGiveUpOnBasicSet = (shouldGiveUpOnBox giveUpAccuracy) :: Box -> Bool,
           BP.dummyPriorityQueue,
-          BP.maxForkDepth = int 3,
+          BP.maxForkDepth,
           BP.dummyMaction = pure ()
         }
     )

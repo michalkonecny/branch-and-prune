@@ -26,6 +26,7 @@ dependencies:
 - monad-logger
 - text
 - unliftio-core
+- stm
 - mixed-types-num
 - aern2-mp
 
@@ -57,6 +58,10 @@ executables:
 tests:
   branch-and-prune-test:
     defaults: hspec/hspec@main
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
     dependencies:
     - hspec
     - branch-and-prune
