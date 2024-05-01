@@ -8,6 +8,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module BranchAndPrune
   ( IsSet (..),
@@ -118,11 +119,14 @@ pavingInnerUndecided inner undecided = Paving {inner, undecided, outer = emptySe
 pavingOuterUndecided :: (IsSet set) => set -> set -> Paving set
 pavingOuterUndecided outer undecided = Paving {inner = emptySet, undecided, outer}
 
+class HasIsAborted result where
+  isAborted :: result -> Bool
+
 forkAndMerge ::
-  (MonadUnliftIO m, IsSet set, IsPriorityQueue priorityQueue elem) =>
-  m (Result set priorityQueue) ->
-  m (Result set priorityQueue) ->
-  m (Result set priorityQueue)
+  (MonadUnliftIO m, HasIsAborted result, Semigroup result) =>
+  m result ->
+  m result ->
+  m result
 forkAndMerge compL compR =
   do
     compL_IO <- toIO compL
@@ -153,11 +157,11 @@ forkAndMerge compL compR =
               case (maybeResultL, maybeResultR) of
                 (Just resultL, Just resultR) ->
                   -- both results available
-                  pure $ mergeResults resultL resultR -- merge the results
+                  pure $ resultL <> resultR -- merge the results
                 _ ->
                   retry -- continue waiting
                   -- kill threads if aborted
-        if result.aborted
+        if isAborted result
           then do
             killThread thread1
             killThread thread2
@@ -170,7 +174,7 @@ forkAndMerge compL compR =
         do
           result <- comp_IO
           atomically $
-            if result.aborted
+            if isAborted result
               then abort_Var `writeTVar` Just result
               else result_Var `writeTVar` Just result
 
@@ -190,17 +194,18 @@ data Result set priorityQueue = Result
     aborted :: Bool
   }
 
-mergeResults ::
+instance HasIsAborted (Result set priorityQueue) where
+  isAborted result = result.aborted
+
+instance 
   (IsSet set, IsPriorityQueue priorityQueue elem) =>
-  Result set priorityQueue ->
-  Result set priorityQueue ->
-  Result set priorityQueue
-mergeResults resL resR =
-  Result
-    { paving = resL.paving `pavingMerge` resR.paving,
-      queue = resL.queue `queueMerge` resR.queue,
-      aborted = resL.aborted || resR.aborted
-    }
+  Semigroup (Result set priorityQueue) where
+  (<>)  resL resR =
+    Result
+      { paving = resL.paving `pavingMerge` resR.paving,
+        queue = resL.queue `queueMerge` resR.queue,
+        aborted = resL.aborted || resR.aborted
+      }
 
 baseResultOnPrevPaving ::
   (IsSet set) =>
