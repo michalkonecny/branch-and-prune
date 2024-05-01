@@ -34,8 +34,8 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO, toIO)
 import Control.Monad.Logger (MonadLogger, logDebugN)
 import qualified Data.Text as T
-import Text.Printf (printf)
 import GHC.Conc (numCapabilities)
+import Text.Printf (printf)
 
 -- The following wrapper supports the use of "printf" to format log messages.
 -- It also reduced the need for OverloadedStrings.
@@ -130,35 +130,29 @@ data Params m basicSet set priorityQueue constraint = ParamsM
 
 data Result set priorityQueue = Result
   { paving :: Paving set,
-    queue :: priorityQueue
+    queue :: priorityQueue,
+    aborted :: Bool
   }
-
--- TODO: add ResultAbort with a paving 
-
-resultIsAborted ::
-  (IsPriorityQueue priorityQueue elem) =>
-  Result set priorityQueue ->
-  Bool
-resultIsAborted result =
-  case queuePickNext result.queue of
-    Nothing -> False
-    _ -> True
 
 mergeResults ::
   (IsSet set, IsPriorityQueue priorityQueue elem) =>
   Result set priorityQueue ->
   Result set priorityQueue ->
   Result set priorityQueue
-mergeResults (Result pavingL queueL) (Result pavingR queueR) =
-  Result (pavingL `pavingMerge` pavingR) (queueL `queueMerge` queueR)
+mergeResults resL resR =
+  Result
+    { paving = resL.paving `pavingMerge` resR.paving,
+      queue = resL.queue `queueMerge` resR.queue,
+      aborted = resL.aborted || resR.aborted
+    }
 
 baseResultOnPrevPaving ::
   (IsSet set) =>
   Paving set ->
   Result set priorityQueue ->
   Result set priorityQueue
-baseResultOnPrevPaving prevPaving (Result paving queue) =
-  Result (prevPaving `pavingMerge` paving) queue
+baseResultOnPrevPaving prevPaving res =
+  res {paving = prevPaving `pavingMerge` res.paving}
 
 branchAndPruneM ::
   ( IsSet set,
@@ -176,7 +170,7 @@ branchAndPruneM ::
 branchAndPruneM (ParamsM {..} :: Params m basicSet set priorityQueue constraint) =
   do
     liftIO $ do
-      printf "capabilities: %d\n" numCapabilities 
+      printf "capabilities: %d\n" numCapabilities
     logDebugStr "B&P process starting"
     result@(Result {paving, queue}) <- bpProcess
     logDebugStr "B&P process finishing"
@@ -200,13 +194,13 @@ branchAndPruneM (ParamsM {..} :: Params m basicSet set priorityQueue constraint)
       | shouldAbort pavingSoFar =
           do
             logDebugThread "Stopping the B&P process."
-            pure $ Result {paving = pavingSoFar, queue}
+            pure $ Result {paving = pavingSoFar, queue, aborted = True}
       | otherwise =
           case queuePickNext queue of
             Nothing ->
               do
                 logDebugThread "The queue is empty, finishing."
-                pure $ Result {paving = pavingSoFar, queue}
+                pure $ Result {paving = pavingSoFar, queue, aborted = False}
             Just ((b, c), queuePicked) ->
               do
                 logDebugThread $ printf "Picked set %s, constraint %s" (show b) (show c)
@@ -246,7 +240,7 @@ branchAndPruneM (ParamsM {..} :: Params m basicSet set priorityQueue constraint)
       where
         logDebugThread (s :: String) = do
           logDebugStr $ "Thread " ++ threadDescr ++ ":" ++ s
-          pure () 
+          pure ()
     forkAndMerge :: m (Result set priorityQueue) -> m (Result set priorityQueue) -> m (Result set priorityQueue)
     forkAndMerge compL compR =
       do
@@ -281,13 +275,12 @@ branchAndPruneM (ParamsM {..} :: Params m basicSet set priorityQueue constraint)
                       pure $ mergeResults resultL resultR -- merge the results
                     _ ->
                       retry -- continue waiting
-            -- kill threads if aborted
-            if resultIsAborted result then
-              do
-              killThread thread1
-              killThread thread2
-            else
-              pure ()
+                      -- kill threads if aborted
+            if result.aborted
+              then do
+                killThread thread1
+                killThread thread2
+              else pure ()
 
             pure result
       where
@@ -296,6 +289,6 @@ branchAndPruneM (ParamsM {..} :: Params m basicSet set priorityQueue constraint)
             do
               result <- comp_IO
               atomically $
-                if resultIsAborted result
+                if result.aborted
                   then abort_Var `writeTVar` Just result
                   else result_Var `writeTVar` Just result

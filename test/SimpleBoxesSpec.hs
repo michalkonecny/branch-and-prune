@@ -32,10 +32,10 @@ import Text.Printf (printf)
 runBP :: Rational -> Box -> Form -> IO (BP.Paving Boxes)
 runBP giveUpAccuracy scope constraint =
   do
-    (BP.Result paving _) <-
+    result <-
       runStdoutLoggingT
         $ boxBranchAndPrune (BoxBPParams {scope, constraint, giveUpAccuracy, maxForkDepth = int 3})
-    pure paving
+    pure result.paving
 
 x :: Expr
 x = exprVar "x"

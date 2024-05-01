@@ -1,5 +1,6 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module IntSetsSpec (spec) where
@@ -20,10 +21,10 @@ import Test.Hspec
 runBP :: BasicIntSet -> IntConstraint -> IO (BP.Paving IntSet)
 runBP scope constraint =
   do
-    (BP.Result paving _) <-
+    result <-
       runStdoutLoggingT $
         intSetBranchAndPrune (IntSetBPParams {scope, constraint})
-    pure paving
+    pure result.paving
 
 spec :: Spec
 spec = do
