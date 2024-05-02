@@ -5,9 +5,9 @@
 
 module IntSetsSpec (spec) where
 
-import qualified BranchAndPrune as BP
+import qualified BranchAndPrune.BranchAndPrune as BP
 import Control.Monad.Logger (runStdoutLoggingT)
-import IntSets
+import BranchAndPrune.ExampleInstances.IntSets
   ( BasicIntSet (BasicIntSet),
     IntConstraint (..),
     IntSet (..),

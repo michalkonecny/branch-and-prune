@@ -14,7 +14,7 @@
 -- This instance of the branch and bound algorithm is intended for executing the
 -- algorithm in a very simple concrete context,
 -- chiefly for testing and educational purposes.
-module IntSets
+module BranchAndPrune.ExampleInstances.IntSets
   ( IntSet (..),
     intSet,
     intSetN,
@@ -27,7 +27,7 @@ module IntSets
   )
 where
 
-import qualified BranchAndPrune as BP
+import qualified BranchAndPrune.BranchAndPrune as BP
 import Control.Monad.Logger (MonadLogger)
 import qualified Data.Set as Set
 import Control.Monad.IO.Unlift (MonadUnliftIO)

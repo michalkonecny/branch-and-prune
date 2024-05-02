@@ -19,7 +19,7 @@
 -- This instance of the branch and bound algorithm is intended for executing the
 -- algorithm in a very simple concrete context,
 -- chiefly for testing and educational purposes.
-module SimpleBoxes
+module BranchAndPrune.ExampleInstances.SimpleBoxes
   ( Var,
     Box (..),
     mkBox,
@@ -40,7 +40,7 @@ import AERN2.MP (Kleenean (..), MPBall)
 import qualified AERN2.MP as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
 import AERN2.MP.Dyadic (dyadic)
-import qualified BranchAndPrune as BP
+import qualified BranchAndPrune.BranchAndPrune as BP
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.List (sortOn)

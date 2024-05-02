@@ -25,10 +25,10 @@ source-repository head
 
 library
   exposed-modules:
-      BranchAndPrune
-      ForkUtils
-      IntSets
-      SimpleBoxes
+      BranchAndPrune.BranchAndPrune
+      BranchAndPrune.ExampleInstances.IntSets
+      BranchAndPrune.ExampleInstances.SimpleBoxes
+      BranchAndPrune.ForkUtils
   other-modules:
       Paths_branch_and_prune
   autogen-modules:

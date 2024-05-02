@@ -7,12 +7,12 @@
 module SimpleBoxesSpec (spec) where
 
 import qualified AERN2.MP as MP
-import qualified BranchAndPrune as BP
+import qualified BranchAndPrune.BranchAndPrune as BP
 import Control.Monad.Logger (runStdoutLoggingT)
 -- import qualified Prelude as P
 import GHC.Records
 import MixedTypesNumPrelude
-import SimpleBoxes
+import BranchAndPrune.ExampleInstances.SimpleBoxes
   ( BinaryComp (..),
     BinaryConn (..),
     Box (..),

@@ -1,4 +1,4 @@
-module ForkUtils
+module BranchAndPrune.ForkUtils
   ( HasIsAborted (..),
     forkAndMerge,
   )

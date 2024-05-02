@@ -10,7 +10,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module BranchAndPrune
+module BranchAndPrune.BranchAndPrune
   ( IsSet (..),
     SetFromBasic (..),
     CanPrune (..),
@@ -33,7 +33,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, logDebugN)
 import qualified Data.Text as T
-import ForkUtils (HasIsAborted (..), forkAndMerge)
+import BranchAndPrune.ForkUtils (HasIsAborted (..), forkAndMerge)
 import GHC.Conc (numCapabilities)
 import Text.Printf (printf)
 
