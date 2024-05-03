@@ -29,6 +29,7 @@ library
       BranchAndPrune.ExampleInstances.IntSets
       BranchAndPrune.ExampleInstances.SimpleBoxes
       BranchAndPrune.ForkUtils
+      BranchAndPrune.Sets
   other-modules:
       Paths_branch_and_prune
   autogen-modules:
