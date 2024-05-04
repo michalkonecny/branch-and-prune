@@ -19,20 +19,26 @@ module BranchAndPrune.BranchAndPrune
   )
 where
 
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, logDebugN)
 import qualified Data.Text as T
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.Format.ISO8601 (iso8601Show)
 import BranchAndPrune.ForkUtils (HasIsAborted (..), forkAndMerge)
 import GHC.Conc (numCapabilities)
 import Text.Printf (printf)
 import BranchAndPrune.Sets
 
 -- The following wrapper supports the use of "printf" to format log messages.
+-- It prepends the current time to the message.
 -- It also reduced the need for OverloadedStrings.
 -- OverloadedStrings is not sufficient to get `printf` to work with the logger functions.
-logDebugStr :: (MonadLogger m) => String -> m ()
-logDebugStr = logDebugN . T.pack
+logDebugStr :: (MonadIO m, MonadLogger m) => String -> m ()
+logDebugStr str = do
+  currTimeT <- T.pack . iso8601Show <$> liftIO getCurrentTime
+  let msgToLog = currTimeT <> T.pack ": " <> T.pack str
+  logDebugN msgToLog
 
 class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   singletonQueue :: elem -> priorityQueue
