@@ -33,6 +33,13 @@ module BranchAndPrune.ExampleInstances.SimpleBoxes
     BinaryComp (..),
     BoxBPParams (..),
     boxBranchAndPrune,
+    exprVar,
+    exprLit,
+    exprSum,
+    formLeq,
+    formAnd,
+    formOr,
+    formImpl,
   )
 where
 
@@ -196,6 +203,31 @@ instance Show Form where
   show (FormBinary op l r) = printf "(%s) %s (%s)" (show l) (show op) (show r)
   show FormTrue = "True"
   show FormFalse = "False"
+
+exprVar :: Var -> Expr
+exprVar var = Expr {eval = \b -> boxGetVarDomain b var, description = var}
+
+exprLit :: Rational -> Expr
+exprLit c = Expr {eval, description = show (double c)}
+  where
+    eval box = MP.mpBallP (MP.getPrecision box) c
+
+exprSum :: Expr -> Expr -> Expr
+exprSum (Expr eval1 desc1) (Expr eval2 desc2) =
+  Expr {eval = \b -> eval1 b + eval2 b, description = printf "(%s) + (%s)" desc1 desc2}
+
+formLeq :: Expr -> Expr -> Form
+formLeq = FormComp CompLeq
+
+formAnd :: Form -> Form -> Form
+formAnd = FormBinary ConnAnd
+
+formOr :: Form -> Form -> Form
+formOr = FormBinary ConnOr
+
+formImpl :: Form -> Form -> Form
+formImpl = FormBinary ConnImpl
+
 
 instance (Applicative m) => BP.CanPrune m Box Form Boxes where
   pruneBasicSetM c b = pure (cP, pavingP)

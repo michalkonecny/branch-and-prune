@@ -46,7 +46,7 @@ library:
   source-dirs: src
 
 executables:
-  branch-and-prune-exe:
+  branch-and-prune-example:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
