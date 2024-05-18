@@ -26,7 +26,7 @@ import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
 import BranchAndPrune.ForkUtils (HasIsAborted (..), forkAndMerge, decideWhetherToFork)
-import GHC.Conc (numCapabilities, newTVar, atomically, readTVar, writeTVar)
+import GHC.Conc (numCapabilities, newTVar, atomically)
 import Text.Printf (printf)
 import BranchAndPrune.Sets
 
@@ -36,9 +36,9 @@ import BranchAndPrune.Sets
 -- OverloadedStrings is not sufficient to get `printf` to work with the logger functions.
 logDebugStr :: (MonadIO m, MonadLogger m) => String -> m ()
 logDebugStr str = do
-  currTimeT <- T.pack . iso8601Show <$> liftIO getCurrentTime
-  let msgToLog = currTimeT <> T.pack ": " <> T.pack str
-  logDebugN msgToLog
+  currTime <- iso8601Show <$> liftIO getCurrentTime
+  let msgToLog = currTime <> ": " <> str
+  logDebugN (T.pack msgToLog)
 
 class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   singletonQueue :: elem -> priorityQueue
