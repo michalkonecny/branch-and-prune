@@ -122,13 +122,13 @@ data IntSetBPParams = IntSetBPParams
 intSetBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => IntSetBPParams -> m (BP.Result IntSet IntSetStack)
 intSetBranchAndPrune (IntSetBPParams {..}) =
   BP.branchAndPruneM
-    ( BP.ParamsM
+    ( BP.Params
         { BP.scope,
           BP.constraint,
           BP.shouldAbort = (\_ -> False) :: BP.Paving IntSet -> Bool,
           BP.shouldGiveUpOnBasicSet = (\_ -> False) :: BasicIntSet -> Bool,
           BP.dummyPriorityQueue,
-          BP.maxForkDepth = 3,
+          BP.maxThreads = 2,
           BP.dummyMaction = pure ()
         }
     )

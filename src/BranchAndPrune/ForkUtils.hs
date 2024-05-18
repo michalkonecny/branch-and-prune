@@ -1,23 +1,41 @@
 module BranchAndPrune.ForkUtils
   ( HasIsAborted (..),
+    decideWhetherToFork,
     forkAndMerge,
   )
 where
 
 import Control.Concurrent (forkIO, killThread)
-import Control.Concurrent.STM (atomically, newTVar, readTVar, retry, writeTVar)
+import Control.Concurrent.STM (TVar, atomically, newTVar, readTVar, retry, writeTVar)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.IO.Unlift (MonadUnliftIO, toIO)
 
 class HasIsAborted result where
   isAborted :: result -> Bool
 
+decideWhetherToFork ::
+  (MonadIO m) =>
+  TVar Integer ->
+  Integer ->
+  Maybe a ->
+  m (Maybe a)
+decideWhetherToFork numberOfThreadsTV maxThreads maybeForkPossible =
+  do
+    liftIO $ atomically $ do
+      nOfThreads <- readTVar numberOfThreadsTV
+      case maybeForkPossible of
+        Just forkInfo | nOfThreads < maxThreads -> do
+          writeTVar numberOfThreadsTV (nOfThreads + 1)
+          pure (Just forkInfo)
+        _ -> pure Nothing
+
 forkAndMerge ::
   (MonadUnliftIO m, HasIsAborted result, Semigroup result) =>
+  TVar Integer ->
   m result ->
   m result ->
   m result
-forkAndMerge compL compR =
+forkAndMerge numberOfThreadsTV compL compR =
   do
     compL_IO <- toIO compL
     compR_IO <- toIO compR
@@ -63,7 +81,11 @@ forkAndMerge compL compR =
       forkIO $
         do
           result <- comp_IO
-          atomically $
+          atomically $ do
+            -- decrement thread counter:
+            nOfThreads <- readTVar numberOfThreadsTV
+            writeTVar numberOfThreadsTV (nOfThreads - 1)
+            -- pass on the result:
             if isAborted result
               then abort_Var `writeTVar` Just result
               else result_Var `writeTVar` Just result

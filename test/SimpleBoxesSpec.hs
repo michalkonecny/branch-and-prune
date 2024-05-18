@@ -34,7 +34,7 @@ runBP giveUpAccuracy scope constraint =
   do
     result <-
       runStdoutLoggingT
-        $ boxBranchAndPrune (BoxBPParams {scope, constraint, giveUpAccuracy, maxForkDepth = int 3})
+        $ boxBranchAndPrune (BoxBPParams {scope, constraint, giveUpAccuracy, maxThreads = 4})
     pure result.paving
 
 x :: Expr
