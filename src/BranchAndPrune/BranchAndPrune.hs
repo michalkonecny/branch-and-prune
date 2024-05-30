@@ -1,4 +1,4 @@
-{-# LANGUAGE DisambiguateRecordFields #-}
+
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -10,7 +10,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module BranchAndPrune.BranchAndPrune
-  ( 
+  (
     module BranchAndPrune.Sets,
     IsPriorityQueue (..),
     Params (..),
@@ -26,7 +26,7 @@ import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
 import BranchAndPrune.ForkUtils (HasIsAborted (..), forkAndMerge, decideWhetherToFork)
-import GHC.Conc (numCapabilities, newTVar, atomically)
+import GHC.Conc (numCapabilities, newTVarIO)
 import Text.Printf (printf)
 import BranchAndPrune.Sets
 
@@ -103,7 +103,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
   do
     liftIO $ do
       printf "capabilities: %d\n" numCapabilities
-    numberOfThreadsTV <- liftIO $ atomically (newTVar 1)
+    numberOfThreadsTV <- liftIO $ newTVarIO 1
     logDebugStr "B&P process starting"
     result@(Result {paving, queue}) <- bpProcess numberOfThreadsTV
     logDebugStr "B&P process finishing"
@@ -141,7 +141,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                     if shouldGiveUpOnBasicSet b
                       then do
                         logDebugThread $ printf "Leaving undecided on: %s" (show b)
-                        let undecidedWithB = pavingSoFar.undecided `setUnion` (fromBasicSets [b])
+                        let undecidedWithB = pavingSoFar.undecided `setUnion` fromBasicSets [b]
                         let pavingWithB = pavingSoFar {undecided = undecidedWithB}
                         step threadNumber pavingWithB queuePicked
                       else do
@@ -159,7 +159,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                             -- not done on b
                             let pruneUndecidedSplit = splitSet prunePaving.undecided
                             logDebugThread $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
-                            let queueWithPruningUndecided = queuePicked `queueAddMany` (map (,cPruned) pruneUndecidedSplit)
+                            let queueWithPruningUndecided = queuePicked `queueAddMany` map (,cPruned) pruneUndecidedSplit
                             forkInfo <- decideWhetherToFork numberOfThreadsTV maxThreads (queueSplit queueWithPruningUndecided)
                             case forkInfo of
                               Just (queueL, queueR) ->
@@ -167,6 +167,10 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                                   logDebugThread "Forking queue into two queues to process independently"
                                   let compL = step (threadNumber + 1) emptyPaving queueL
                                   let compR = step (threadNumber + 2) emptyPaving queueR
+
+                                  -- resultL <- compL
+                                  -- resultR <- compR
+                                  -- let result = resultL <> resultR
                                   result <- forkAndMerge numberOfThreadsTV compL compR
                                   pure $ baseResultOnPrevPaving pavingWithPruningDecided result
                               _ ->
@@ -174,5 +178,5 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                                   step threadNumber pavingWithPruningDecided queueWithPruningUndecided
           where
             logDebugThread (s :: String) = do
-              logDebugStr $ "Thread " ++ (show threadNumber) ++ ":" ++ s
+              logDebugStr $ "Thread " ++ show threadNumber ++ ":" ++ s
               pure ()

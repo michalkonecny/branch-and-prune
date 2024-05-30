@@ -1,4 +1,3 @@
-{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -205,7 +204,7 @@ instance Show Form where
   show FormFalse = "False"
 
 exprVar :: Var -> Expr
-exprVar var = Expr {eval = \b -> boxGetVarDomain b var, description = var}
+exprVar var = Expr {eval = (`boxGetVarDomain` var), description = var}
 
 exprLit :: Rational -> Expr
 exprLit c = Expr {eval, description = show (double c)}
@@ -288,7 +287,7 @@ instance BP.IsPriorityQueue BoxStack (Box, Form) where
     | splitPoint == 0 = Nothing
     | otherwise = Just (BoxStack esL, BoxStack esR)
     where
-      splitPoint = (length es) `divI` 2
+      splitPoint = length es `divI` 2
       (esL, esR) = splitAt splitPoint es
 
   queueMerge (BoxStack stackL) (BoxStack stackR) = BoxStack $ stackL ++ stackR
@@ -307,7 +306,7 @@ shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
     smallerThanPrec :: MPBall -> Bool
     smallerThanPrec ball = diameter <= giveUpAccuracy
       where
-        diameter = 2 * (MP.radius ball)
+        diameter = 2 * MP.radius ball
 
 boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => BoxBPParams -> m (BP.Result Boxes BoxStack)
 boxBranchAndPrune (BoxBPParams {..}) =
@@ -315,8 +314,8 @@ boxBranchAndPrune (BoxBPParams {..}) =
     ( BP.Params
         { BP.scope,
           BP.constraint,
-          BP.shouldAbort = (\_ -> False) :: BP.Paving Boxes -> Bool,
-          BP.shouldGiveUpOnBasicSet = (shouldGiveUpOnBox giveUpAccuracy) :: Box -> Bool,
+          BP.shouldAbort = const False :: BP.Paving Boxes -> Bool,
+          BP.shouldGiveUpOnBasicSet = shouldGiveUpOnBox giveUpAccuracy :: Box -> Bool,
           BP.dummyPriorityQueue,
           BP.maxThreads,
           BP.dummyMaction = pure ()

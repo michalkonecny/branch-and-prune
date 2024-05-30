@@ -1,9 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 module BranchAndPrune.Sets
   ( IsSet (..),

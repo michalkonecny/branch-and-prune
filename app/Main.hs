@@ -1,9 +1,6 @@
-{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module Main (main) where
 
@@ -34,7 +31,7 @@ processArgs = do
   [epsS, maxThreadsS, debugS] <- getArgs
   let eps = toRational (read epsS :: Double)
   let maxThreads = read maxThreadsS :: Integer
-  let debug = (debugS == "debug")
+  let debug = debugS == "debug"
   return (eps, maxThreads, debug)
 
 {-|
@@ -52,9 +49,9 @@ main =
         then runStdoutLoggingT task
         else runNoLoggingT task
       where
-        scope = (mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))])
+        scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))]
 
-        constraint = ((((exprSum x (exprLit eps)) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z))
+        constraint = ((exprSum x (exprLit eps) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z)
 
         task :: (MonadLogger m, MonadUnliftIO m) => m ()
         task = do

@@ -6,7 +6,8 @@ module BranchAndPrune.ForkUtils
 where
 
 import Control.Concurrent (forkIO, killThread)
-import Control.Concurrent.STM (TVar, atomically, newTVar, readTVar, retry, writeTVar)
+import Control.Concurrent.STM (TVar, atomically, newTVarIO, readTVar, retry, writeTVar)
+import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.IO.Unlift (MonadUnliftIO, toIO)
 
@@ -42,11 +43,11 @@ forkAndMerge numberOfThreadsTV compL compR =
     liftIO $
       do
         -- create shared variables for results:
-        resultL_Var <- atomically $ newTVar Nothing
-        resultR_Var <- atomically $ newTVar Nothing
+        resultL_Var <- newTVarIO Nothing
+        resultR_Var <- newTVarIO Nothing
 
         -- create a shared variable for aborting the computation:
-        abort_Var <- atomically $ newTVar Nothing
+        abort_Var <- newTVarIO Nothing
 
         -- fork the computations:
         thread1 <- forkComp abort_Var resultL_Var compL_IO
@@ -69,11 +70,9 @@ forkAndMerge numberOfThreadsTV compL compR =
                 _ ->
                   retry -- continue waiting
                   -- kill threads if aborted
-        if isAborted result
-          then do
-            killThread thread1
-            killThread thread2
-          else pure ()
+        when (isAborted result) $ do
+          killThread thread1
+          killThread thread2
 
         pure result
   where

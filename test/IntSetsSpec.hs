@@ -1,7 +1,6 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module IntSetsSpec (spec) where
 
@@ -32,12 +31,12 @@ spec = do
     it "solves (=1) over scope {1, 2}" $
       do
         runBP (BasicIntSet 1 2) (IntEq 1)
-          `shouldReturn` (BP.pavingInnerOuter (intSetN 1) (intSetN 2))
+          `shouldReturn` BP.pavingInnerOuter (intSetN 1) (intSetN 2)
     it "solves (=2) over scope {1,2,3}" $
       do
         runBP (BasicIntSet 1 3) (IntEq 2)
-          `shouldReturn` (BP.pavingInnerOuter (intSetN 2) (intSet [1, 3]))
+          `shouldReturn` BP.pavingInnerOuter (intSetN 2) (intSet [1, 3])
     it "solves (=4) over scope {1,2,3}" $
       do
         runBP (BasicIntSet 1 3) (IntEq 4)
-          `shouldReturn` (BP.pavingOuter (intSet [1 .. 3]))
+          `shouldReturn` BP.pavingOuter (intSet [1 .. 3])

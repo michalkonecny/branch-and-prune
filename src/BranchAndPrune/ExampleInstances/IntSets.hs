@@ -1,4 +1,3 @@
-{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -38,13 +37,13 @@ instance BP.IsSet IntSet where
   emptySet = IntSet Set.empty
   setIsEmpty (IntSet set) = Set.null set
   setUnion (IntSet set1) (IntSet set2) = IntSet (Set.union set1 set2)
-  setShowStats (IntSet set) = show (Set.size set)  
+  setShowStats (IntSet set) = show (Set.size set)
 
 data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int} deriving (Eq, Show)
 
 instance BP.SetFromBasic BasicIntSet IntSet where
   fromBasicSets basicSets =
-    IntSet (Set.fromList (concat (map doOne basicSets)))
+    IntSet (Set.fromList (concatMap doOne basicSets))
     where
       doOne (BasicIntSet l u) = [l .. u]
 
@@ -64,10 +63,10 @@ instance BP.CanSplitSet BasicIntSet IntSet where
           (n : ns) -> lookForIntervals n n ns []
         where
           nAscendingList = Set.toAscList nSet
-          lookForIntervals l u [] prev = (BasicIntSet l u) : prev
+          lookForIntervals l u [] prev = BasicIntSet l u : prev
           lookForIntervals l u (n : ns) prev
             | n == u + 1 = lookForIntervals l n ns prev
-            | otherwise = lookForIntervals n n ns ((BasicIntSet l u) : prev)
+            | otherwise = lookForIntervals n n ns (BasicIntSet l u : prev)
 
 data IntConstraint = IntEq Int | IntTrue | IntFalse -- \| IntNeq Int
   deriving (Eq, Show)
@@ -95,8 +94,8 @@ pruneBasicSet c@(IntEq n) (BasicIntSet l u)
   | otherwise -- n < l < u || l < u < n
     =
       (IntFalse, BP.pavingUndecided (intSetLU l u)) -- no pruning but simplifying the constraint
-pruneBasicSet c@(IntTrue) (BasicIntSet l u) = (c, BP.pavingInner (intSetLU l u))
-pruneBasicSet c@(IntFalse) (BasicIntSet l u) = (c, BP.pavingOuter (intSetLU l u))
+pruneBasicSet c@IntTrue (BasicIntSet l u) = (c, BP.pavingInner (intSetLU l u))
+pruneBasicSet c@IntFalse (BasicIntSet l u) = (c, BP.pavingOuter (intSetLU l u))
 
 newtype IntSetStack = IntSetStack [(BasicIntSet, IntConstraint)]
 
@@ -110,7 +109,7 @@ instance BP.IsPriorityQueue IntSetStack (BasicIntSet, IntConstraint) where
     | splitPoint == 0 = Nothing
     | otherwise = Just (IntSetStack esL, IntSetStack esR)
     where
-      splitPoint = (length es) `div` 2
+      splitPoint = length es `div` 2
       (esL, esR) = splitAt splitPoint es
   queueMerge (IntSetStack stackL) (IntSetStack stackR) = IntSetStack $ stackL ++ stackR
 
@@ -125,8 +124,8 @@ intSetBranchAndPrune (IntSetBPParams {..}) =
     ( BP.Params
         { BP.scope,
           BP.constraint,
-          BP.shouldAbort = (\_ -> False) :: BP.Paving IntSet -> Bool,
-          BP.shouldGiveUpOnBasicSet = (\_ -> False) :: BasicIntSet -> Bool,
+          BP.shouldAbort = const False :: BP.Paving IntSet -> Bool,
+          BP.shouldGiveUpOnBasicSet = const False :: BasicIntSet -> Bool,
           BP.dummyPriorityQueue,
           BP.maxThreads = 2,
           BP.dummyMaction = pure ()
