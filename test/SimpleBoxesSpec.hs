@@ -11,9 +11,7 @@ import qualified BranchAndPrune.BranchAndPrune as BP
 import BranchAndPrune.ExampleInstances.RealConstraints
   ( exprLit,
     exprVar,
-    formAnd,
     formImpl,
-    formLeq,
   )
 import BranchAndPrune.ExampleInstances.SimpleBoxes
   ( Box,
@@ -47,15 +45,15 @@ spec = do
   describe "branch and prune over Boxes" $ do
     it "solves (0<=x) over scope {x: [1,2]}"
       $ do
-        runBP 0.25 (mkBox [("x", (1.0, 2.0))]) (exprLit 0.0 `formLeq` x)
+        runBP 0.25 (mkBox [("x", (1.0, 2.0))]) (0.0 <= x)
           `shouldReturn` BP.pavingInner (BP.fromBasicSets [mkBox [("x", (1.0, 2.0))]])
     it "solves (0<=x) over scope {x: [-2,-1]}"
       $ do
-        runBP 0.25 (mkBox [("x", (-2.0, -1.0))]) (exprLit 0.0 `formLeq` x)
+        runBP 0.25 (mkBox [("x", (-2.0, -1.0))]) (0.0 <= x)
           `shouldReturn` BP.pavingOuter (BP.fromBasicSets [mkBox [("x", (-2.0, -1.0))]])
     it "solves (0<=x) over scope {x: [-1,-1]} with give-up accuracy 0.25"
       $ do
-        runBP 0.25 (mkBox [("x", (-1.0, 1.0))]) (exprLit 0.0 `formLeq` x)
+        runBP 0.25 (mkBox [("x", (-1.0, 1.0))]) (0.0 <= x)
           `shouldReturn` ( BP.Paving
                              { inner = BP.fromBasicSets [mkBox [("x", (0.0, 1.0))]],
                                outer = BP.fromBasicSets [mkBox [("x", (-1.0, -0.5))]],
@@ -67,12 +65,12 @@ spec = do
         runBP
           0.25
           (mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))])
-          (((x + 1.0) `formLeq` y) `formImpl` (x `formLeq` y))
+          (((x + 1.0) <= y) `formImpl` (x <= y))
           >>= (`shouldSatisfy` (\paving -> null paving.outer.boxes && null paving.undecided.boxes))
     it "solves (x+0.01 <= y /\\ y <= z ==> x <= z) over scope {x: [0,2], y: [0,2], z: [0,2]} with give-up accuracy 0.001"
       $ do
         runBP
           0.001
           (mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))])
-          ((((x + 0.01) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z))
+          ((((x + 0.01) <= y) && (y <= z)) `formImpl` (x <= z))
           >>= (`shouldSatisfy` (\paving -> null paving.outer.boxes && null paving.undecided.boxes))

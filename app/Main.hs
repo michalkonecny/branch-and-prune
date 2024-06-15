@@ -10,9 +10,7 @@ import BranchAndPrune.BranchAndPrune (Result (Result), showPavingSummary)
 import BranchAndPrune.ExampleInstances.RealConstraints
   ( exprLit,
     exprVar,
-    formAnd,
     formImpl,
-    formLeq,
   )
 import BranchAndPrune.ExampleInstances.SimpleBoxes
   ( Box (..),
@@ -42,15 +40,13 @@ problems eps =
     [ ( "transitivityEps",
         Problem
           { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))],
-            -- (x + eps <= y /\ y <= z) => x <= z
-            constraint = (((x + eps) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z)
+            constraint = (((x + eps) <= y) && (y <= z)) `formImpl` (x <= z)
           }
       ),
       ( "circleEps",
         Problem
           { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
-            -- xx -2xy + yy <= 1  =>  x <= 1 + eps
-            constraint = (((x + eps) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z)
+            constraint = (x*x - 2.0*x*y + y*y <= 1.0) `formImpl` (x <= 1.0 + eps)
           }
       )
     ]
