@@ -1,63 +1,93 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RebindableSyntax #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main (main) where
 
-import BranchAndPrune.ExampleInstances.SimpleBoxes
-  ( BoxBPParams (..),
-    Expr,
-    boxBranchAndPrune,
-    exprLit,
-    exprSum,
+import BranchAndPrune.BranchAndPrune (Result (Result), showPavingSummary)
+import BranchAndPrune.ExampleInstances.RealConstraints
+  ( exprLit,
     exprVar,
     formAnd,
     formImpl,
     formLeq,
+  )
+import BranchAndPrune.ExampleInstances.SimpleBoxes
+  ( Box (..),
+    BoxBPParams (..),
+    ExprB,
+    FormB,
+    boxBranchAndPrune,
     mkBox,
   )
-import Control.Monad.IO.Unlift (MonadUnliftIO, MonadIO (liftIO))
+import Control.Monad.IO.Unlift (MonadIO (liftIO), MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, NoLoggingT (runNoLoggingT), runStdoutLoggingT)
+import Data.Map as Map
+import Data.Maybe (fromJust)
+import GHC.Records
+import MixedTypesNumPrelude
 import System.Environment (getArgs)
-import BranchAndPrune.BranchAndPrune (showPavingSummary, Result (Result))
+import qualified Prelude as P
 
-x, y, z :: Expr
+data Problem = Problem
+  { scope :: Box,
+    constraint :: FormB
+  }
+
+problems :: Rational -> Map.Map String Problem
+problems eps =
+  Map.fromList
+    [ ( "transitivityEps",
+        Problem
+          { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))],
+            -- (x + eps <= y /\ y <= z) => x <= z
+            constraint = (((x + eps) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z)
+          }
+      ),
+      ( "circleEps",
+        Problem
+          { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
+            -- xx -2xy + yy <= 1  =>  x <= 1 + eps
+            constraint = (((x + eps) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z)
+          }
+      )
+    ]
+
+x, y, z :: ExprB
 x = exprVar "x"
 y = exprVar "y"
 z = exprVar "z"
 
-processArgs :: IO (Rational, Integer, Bool)
+processArgs :: IO (Problem, Rational, Integer, Bool)
 processArgs = do
-  [epsS, maxThreadsS, debugS] <- getArgs
+  [probS, epsS, maxThreadsS, debugS] <- getArgs
   let eps = toRational (read epsS :: Double)
+  let prob = fromJust $ Map.lookup probS (problems eps)
   let maxThreads = read maxThreadsS :: Integer
   let debug = debugS == "debug"
-  return (eps, maxThreads, debug)
+  return (prob, eps, maxThreads, debug)
 
-{-|
-Example run:
-```
-time branch-and-prune-example 0.005 4 a +RTS -N4
-```
--}
+-- |
+-- Example run:
+--
+-- > time branch-and-prune-example transitivityEps 0.005 4 a +RTS -N4
 main :: IO ()
 main =
   processArgs >>= mainWithArgs
   where
-    mainWithArgs (eps, maxThreads, debug) =
+    mainWithArgs :: (Problem, Rational, Integer, Bool) -> IO ()
+    mainWithArgs (Problem {scope, constraint}, eps, maxThreads, debug) =
       if debug
         then runStdoutLoggingT task
         else runNoLoggingT task
       where
-        scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))]
-
-        constraint = ((exprSum x (exprLit eps) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z)
-
         task :: (MonadLogger m, MonadUnliftIO m) => m ()
         task = do
           (Result paving _ _) <-
-            boxBranchAndPrune $
-              BoxBPParams
+            boxBranchAndPrune
+              $ BoxBPParams
                 { maxThreads,
                   giveUpAccuracy = eps / 10,
                   scope,

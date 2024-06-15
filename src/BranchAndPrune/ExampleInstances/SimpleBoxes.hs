@@ -22,23 +22,12 @@ module BranchAndPrune.ExampleInstances.SimpleBoxes
   ( Var,
     Box (..),
     mkBox,
-    boxGetVarDomain,
     Boxes (..),
     BoxStack (..),
-    Expr (..),
-    Form (..),
-    UnaryConn (..),
-    BinaryConn (..),
-    BinaryComp (..),
+    ExprB,
+    FormB,
     BoxBPParams (..),
     boxBranchAndPrune,
-    exprVar,
-    exprLit,
-    exprSum,
-    formLeq,
-    formAnd,
-    formOr,
-    formImpl,
   )
 where
 
@@ -47,6 +36,7 @@ import qualified AERN2.MP as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
 import AERN2.MP.Dyadic (dyadic)
 import qualified BranchAndPrune.BranchAndPrune as BP
+import BranchAndPrune.ExampleInstances.RealConstraints
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.List (sortOn)
@@ -58,8 +48,6 @@ import Text.Printf (printf)
 import qualified Prelude as P
 
 {- N-dimensional Boxes -}
-
-type Var = String
 
 data Box = Box {varDomains :: Map.Map Var MP.MPBall, splitOrder :: [Var]}
 
@@ -83,7 +71,7 @@ varDomainsR b = sortOn fst $ map fromBall (Map.toList b.varDomains)
         (lR, uR) = MP.endpoints ball
 
 instance MP.HasPrecision Box where
-  getPrecision (Box {..}) = MP.defaultPrecision -- TODO : use precision from varDomains if possible
+  getPrecision (Box {}) = MP.defaultPrecision -- TODO : use precision from varDomains if possible
 
 mkBox :: [(Var, (Rational, Rational))] -> Box
 mkBox varDomainsRational =
@@ -148,87 +136,17 @@ splitMPBall b = (bL, bU)
     bL = fromMPBallEndpoints l m
     bU = fromMPBallEndpoints m u
 
-{- Non-linear Constraints -}
+type ExprB = Expr Box MPBall
 
-data Expr = Expr {eval :: Box -> MPBall, description :: String}
+instance CanGetLiteral Box MPBall where
+  getLiteral box = MP.mpBallP (MP.getPrecision box)
 
-instance Show Expr where
-  show expr = expr.description
+instance CanGetVarDomain Box MPBall where
+  getVarDomain = boxGetVarDomain
 
-instance P.Eq Expr where
-  expr1 == expr2 = expr1.description == expr2.description
+type FormB = Form ExprB
 
--- data UnaryOp = OpNeg | OpAbs | OpExp | OpSine | OpIntPow Integer
-
--- data BinaryOp = OpPlus | OpTimes | OpDiv | OpMax | OpMin
-
--- data Exp
---   = ExpLit Rational
---   | ExpVar Var
---   | ExpUnary UnaryOp Exp
---   | ExpBinary BinaryOp Exp Exp
-
-data BinaryComp = CompLeq
-  deriving (P.Eq)
-
-instance Show BinaryComp where
-  show CompLeq = "<="
-
-data UnaryConn = ConnNeg
-  deriving (P.Eq)
-
-instance Show UnaryConn where
-  show ConnNeg = "¬"
-
-data BinaryConn = ConnAnd | ConnOr | ConnImpl
-  deriving (P.Eq)
-
-instance Show BinaryConn where
-  show ConnAnd = "∧"
-  show ConnOr = "∨"
-  show ConnImpl = "⇒"
-
-data Form
-  = FormComp BinaryComp Expr Expr
-  | FormUnary UnaryConn Form
-  | FormBinary BinaryConn Form Form
-  | FormTrue
-  | FormFalse
-  deriving (P.Eq)
-
-instance Show Form where
-  show (FormComp comp l r) = printf "%s %s %s" (show l) (show comp) (show r)
-  show (FormUnary op l) = printf "%s (%s)" (show op) (show l)
-  show (FormBinary op l r) = printf "(%s) %s (%s)" (show l) (show op) (show r)
-  show FormTrue = "True"
-  show FormFalse = "False"
-
-exprVar :: Var -> Expr
-exprVar var = Expr {eval = (`boxGetVarDomain` var), description = var}
-
-exprLit :: Rational -> Expr
-exprLit c = Expr {eval, description = show (double c)}
-  where
-    eval box = MP.mpBallP (MP.getPrecision box) c
-
-exprSum :: Expr -> Expr -> Expr
-exprSum (Expr eval1 desc1) (Expr eval2 desc2) =
-  Expr {eval = \b -> eval1 b + eval2 b, description = printf "(%s) + (%s)" desc1 desc2}
-
-formLeq :: Expr -> Expr -> Form
-formLeq = FormComp CompLeq
-
-formAnd :: Form -> Form -> Form
-formAnd = FormBinary ConnAnd
-
-formOr :: Form -> Form -> Form
-formOr = FormBinary ConnOr
-
-formImpl :: Form -> Form -> Form
-formImpl = FormBinary ConnImpl
-
-
-instance (Applicative m) => BP.CanPrune m Box Form Boxes where
+instance (Applicative m) => BP.CanPrune m Box FormB Boxes where
   pruneBasicSetM c b = pure (cP, pavingP)
     where
       cP = simplifyOnBox b c
@@ -238,9 +156,10 @@ instance (Applicative m) => BP.CanPrune m Box Form Boxes where
         _ -> BP.pavingUndecided bSet
       bSet = BP.fromBasicSets [b]
 
-simplifyOnBox :: Box -> Form -> Form
+simplifyOnBox :: Box -> FormB -> FormB
 simplifyOnBox box = simplify
   where
+    simplify :: FormB -> FormB
     simplify (FormComp CompLeq e1 e2) =
       case e1.eval box <= e2.eval box of
         CertainTrue -> FormTrue
@@ -275,9 +194,9 @@ simplifyOnBox box = simplify
     simplify FormTrue = FormTrue
     simplify FormFalse = FormFalse
 
-newtype BoxStack = BoxStack [(Box, Form)]
+newtype BoxStack = BoxStack [(Box, FormB)]
 
-instance BP.IsPriorityQueue BoxStack (Box, Form) where
+instance BP.IsPriorityQueue BoxStack (Box, FormB) where
   singletonQueue e = BoxStack [e]
   queueToList (BoxStack list) = list
   queuePickNext (BoxStack []) = Nothing
@@ -294,7 +213,7 @@ instance BP.IsPriorityQueue BoxStack (Box, Form) where
 
 data BoxBPParams = BoxBPParams
   { scope :: Box,
-    constraint :: Form,
+    constraint :: FormB,
     maxThreads :: Integer,
     giveUpAccuracy :: Rational
   }

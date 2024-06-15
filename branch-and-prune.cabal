@@ -27,6 +27,7 @@ library
   exposed-modules:
       BranchAndPrune.BranchAndPrune
       BranchAndPrune.ExampleInstances.IntSets
+      BranchAndPrune.ExampleInstances.RealConstraints
       BranchAndPrune.ExampleInstances.SimpleBoxes
       BranchAndPrune.ForkUtils
       BranchAndPrune.Sets

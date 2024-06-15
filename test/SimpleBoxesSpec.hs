@@ -8,19 +8,20 @@ module SimpleBoxesSpec (spec) where
 import qualified BranchAndPrune.BranchAndPrune as BP
 -- import qualified Prelude as P
 
-import BranchAndPrune.ExampleInstances.SimpleBoxes
-  ( Box,
-    BoxBPParams (..),
-    Boxes (..),
-    Expr,
-    Form,
-    boxBranchAndPrune,
-    exprLit,
-    exprSum,
+import BranchAndPrune.ExampleInstances.RealConstraints
+  ( exprLit,
     exprVar,
     formAnd,
     formImpl,
     formLeq,
+  )
+import BranchAndPrune.ExampleInstances.SimpleBoxes
+  ( Box,
+    BoxBPParams (..),
+    Boxes (..),
+    ExprB,
+    FormB,
+    boxBranchAndPrune,
     mkBox,
   )
 import Control.Monad.Logger (runStdoutLoggingT)
@@ -28,7 +29,7 @@ import GHC.Records
 import MixedTypesNumPrelude
 import Test.Hspec
 
-runBP :: Rational -> Box -> Form -> IO (BP.Paving Boxes)
+runBP :: Rational -> Box -> FormB -> IO (BP.Paving Boxes)
 runBP giveUpAccuracy scope constraint =
   do
     result <-
@@ -36,7 +37,7 @@ runBP giveUpAccuracy scope constraint =
         $ boxBranchAndPrune (BoxBPParams {scope, constraint, giveUpAccuracy, maxThreads = 4})
     pure result.paving
 
-x, y, z :: Expr
+x, y, z :: ExprB
 x = exprVar "x"
 y = exprVar "y"
 z = exprVar "z"
@@ -66,12 +67,12 @@ spec = do
         runBP
           0.25
           (mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))])
-          ((exprSum x (exprLit 1.0) `formLeq` y) `formImpl` (x `formLeq` y))
+          (((x + 1.0) `formLeq` y) `formImpl` (x `formLeq` y))
           >>= (`shouldSatisfy` (\paving -> null paving.outer.boxes && null paving.undecided.boxes))
     it "solves (x+0.01 <= y /\\ y <= z ==> x <= z) over scope {x: [0,2], y: [0,2], z: [0,2]} with give-up accuracy 0.001"
       $ do
         runBP
           0.001
           (mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))])
-          (((exprSum x (exprLit 0.01) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z))
+          ((((x + 0.01) `formLeq` y) `formAnd` (y `formLeq` z)) `formImpl` (x `formLeq` z))
           >>= (`shouldSatisfy` (\paving -> null paving.outer.boxes && null paving.undecided.boxes))
