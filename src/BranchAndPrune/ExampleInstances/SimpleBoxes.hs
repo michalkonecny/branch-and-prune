@@ -9,15 +9,9 @@
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
--- This module impements very simple constraints over sets of integers and
--- all the ingredients needed to apply the branch and bound algorithm to
--- solve such constraints.  The pruning method chosen is deliberately sub-optimal
--- so that branching is required in addition to pruning
--- to solve the constraints.
+-- This module provides the ingredients needed to apply the branch and bound algorithm to
+-- solve real constraints with very simple pruning based only on straightforward interval evaluation.
 --
--- This instance of the branch and bound algorithm is intended for executing the
--- algorithm in a very simple concrete context,
--- chiefly for testing and educational purposes.
 module BranchAndPrune.ExampleInstances.SimpleBoxes
   ( Var,
     Box (..),
