@@ -47,7 +47,9 @@ data Paving set = Paving
 
 showPavingSummary :: (IsSet set) => Paving set -> String
 showPavingSummary (Paving {..}) =
-  printf "{inner: %s, undecided: %s, outer: %s}" (setShowStats inner) (setShowStats undecided) (setShowStats outer)
+  -- printf "{inner: %s, undecided: %s, outer: %s}" (setShowStats inner) (setShowStats undecided) (setShowStats outer)
+  printf "{inner: ??, undecided: %s, outer: %s}" (setShowStats undecided) (setShowStats outer)
+  -- disabling printing of "inner" to avoid inconsistent slow-down when running with 1 thread
 
 emptyPaving :: (IsSet set) => Paving set
 emptyPaving =
