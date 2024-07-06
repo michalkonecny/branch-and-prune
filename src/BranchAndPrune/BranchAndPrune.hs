@@ -105,7 +105,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
       printf "capabilities: %d\n" numCapabilities
     numberOfThreadsTV <- liftIO $ newTVarIO 1
     logDebugStr "B&P process starting"
-    result@(Result {paving, queue}) <- bpProcess numberOfThreadsTV
+    result@(Result {queue}) <- bpProcess numberOfThreadsTV
     logDebugStr "B&P process finishing"
     -- print result summary:
     case queuePickNext queue of
@@ -113,7 +113,6 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
         do
           -- queue empty, process finished
           logDebugStr "Successfully paved the whole set."
-          logDebugStr $ printf "Paving summary: %s" (showPavingSummary paving)
       Just ((b, _), _) ->
         -- queue not empty, process unfinished
         logDebugStr $ printf "Aborted around: %s" (show b)
@@ -168,12 +167,14 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                                   let compL = step (threadNumber + 1) emptyPaving queueL
                                   let compR = step (threadNumber + 2) emptyPaving queueR
 
-                                  -- resultL <- compL
-                                  -- resultR <- compR
-                                  -- let result = resultL <> resultR
+                                  -- This is what the forkAndMerge does, but in parallel:
+                                  --    resultL <- compL
+                                  --    resultR <- compR
+                                  --    let result = resultL <> resultR
                                   result <- forkAndMerge numberOfThreadsTV compL compR
                                   pure $ baseResultOnPrevPaving pavingWithPruningDecided result
                               _ ->
+                                -- do not fork, continue the current thread for the whole queue
                                 do
                                   step threadNumber pavingWithPruningDecided queueWithPruningUndecided
           where

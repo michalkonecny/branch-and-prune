@@ -46,7 +46,7 @@ problems eps =
       ( "circleEps",
         Problem
           { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
-            constraint = (x*x - 2.0*x*y + y*y <= 1.0) `formImpl` (x - y <= 1.0 + eps)
+            constraint = (x * x - 2.0 * x * y + y * y <= 1.0) `formImpl` (x - y <= 1.0 + eps)
           }
       )
     ]
@@ -69,9 +69,8 @@ processArgs = do
 -- Example runs:
 --
 -- > time branch-and-prune-example transitivityEps 0.005 4 a +RTS -N4
--- 
+--
 -- > time branch-and-prune-example circleEps 0.001 4 nodebug +RTS -N4
--- 
 main :: IO ()
 main =
   processArgs >>= mainWithArgs
