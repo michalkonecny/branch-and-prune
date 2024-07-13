@@ -1,4 +1,3 @@
-{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -10,27 +9,17 @@
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
--- This module impements very simple constraints over sets of integers and
--- all the ingredients needed to apply the branch and bound algorithm to
--- solve such constraints.  The pruning method chosen is deliberately sub-optimal
--- so that branching is required in addition to pruning
--- to solve the constraints.
+-- This module provides the ingredients needed to apply the branch and bound algorithm to
+-- solve real constraints with very simple pruning based only on straightforward interval evaluation.
 --
--- This instance of the branch and bound algorithm is intended for executing the
--- algorithm in a very simple concrete context,
--- chiefly for testing and educational purposes.
-module SimpleBoxes
+module BranchAndPrune.ExampleInstances.SimpleBoxes
   ( Var,
     Box (..),
     mkBox,
-    boxGetVarDomain,
     Boxes (..),
     BoxStack (..),
-    Expr (..),
-    Form (..),
-    UnaryConn (..),
-    BinaryConn (..),
-    BinaryComp (..),
+    ExprB,
+    FormB,
     BoxBPParams (..),
     boxBranchAndPrune,
   )
@@ -39,7 +28,10 @@ where
 import AERN2.MP (Kleenean (..), MPBall)
 import qualified AERN2.MP as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
-import qualified BranchAndPrune as BP
+import AERN2.MP.Dyadic (dyadic)
+import qualified BranchAndPrune.BranchAndPrune as BP
+import BranchAndPrune.ExampleInstances.RealConstraints
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.List (sortOn)
 import qualified Data.List as List
@@ -48,11 +40,8 @@ import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import qualified Prelude as P
-import AERN2.MP.Dyadic (dyadic)
 
 {- N-dimensional Boxes -}
-
-type Var = String
 
 data Box = Box {varDomains :: Map.Map Var MP.MPBall, splitOrder :: [Var]}
 
@@ -76,7 +65,7 @@ varDomainsR b = sortOn fst $ map fromBall (Map.toList b.varDomains)
         (lR, uR) = MP.endpoints ball
 
 instance MP.HasPrecision Box where
-  getPrecision (Box {..}) = MP.defaultPrecision -- TODO : use precision from varDomains if possible
+  getPrecision (Box {}) = MP.defaultPrecision -- TODO : use precision from varDomains if possible
 
 mkBox :: [(Var, (Rational, Rational))] -> Box
 mkBox varDomainsRational =
@@ -99,14 +88,26 @@ boxGetVarDomain (Box {..}) var =
 boxAreaD :: Box -> Double
 boxAreaD (Box {..}) = product (map (double . dyadic . MP.radius) (Map.elems varDomains))
 
-newtype Boxes = Boxes {boxes :: [Box]} deriving (P.Eq, Show)
+data Boxes
+  = Boxes [Box]
+  | BoxesUnion [Boxes]
+  deriving (P.Eq, Show)
+
+boxesCount :: Boxes -> Integer
+boxesCount (Boxes boxes) = length boxes
+boxesCount (BoxesUnion union) = sum (map boxesCount union)
+
+boxesAreaD :: Boxes -> Double
+boxesAreaD (Boxes boxes) = sum (map boxAreaD boxes)
+boxesAreaD (BoxesUnion union) = sum (map boxesAreaD union)
 
 instance BP.IsSet Boxes where
   emptySet = Boxes []
   setIsEmpty (Boxes boxes) = null boxes
-  setUnion (Boxes boxes1) (Boxes boxes2) = Boxes (boxes1 ++ boxes2)
-  setShowStats (Boxes boxes) = 
-    printf "{|boxes| = %d, area = %3.2f}" (length boxes) (sum (map boxAreaD boxes))
+  setIsEmpty (BoxesUnion union) = List.all BP.setIsEmpty union
+  setUnion bs1 bs2 = BoxesUnion [bs1, bs2]
+  setShowStats bs =
+    printf "{|boxes| = %d, area = %3.2f}" (boxesCount bs) (boxesAreaD bs)
 
 instance BP.SetFromBasic Box Boxes where
   fromBasicSets = Boxes
@@ -115,6 +116,7 @@ instance BP.CanSplitSet Box Boxes where
   splitSet (Boxes boxes) = case boxes of
     [box] -> splitBox box -- split since we should return at least two boxes if possible
     _ -> boxes -- no box or at least two boxes
+  splitSet (BoxesUnion union) = List.concatMap BP.splitSet union
 
 splitBox :: Box -> [Box]
 splitBox box = case box.splitOrder of
@@ -141,62 +143,17 @@ splitMPBall b = (bL, bU)
     bL = fromMPBallEndpoints l m
     bU = fromMPBallEndpoints m u
 
-{- Non-linear Constraints -}
+type ExprB = Expr Box MPBall
 
-data Expr = Expr {eval :: Box -> MPBall, description :: String}
+instance CanGetLiteral Box MPBall where
+  getLiteral box = MP.mpBallP (MP.getPrecision box)
 
-instance Show Expr where
-  show expr = expr.description
+instance CanGetVarDomain Box MPBall where
+  getVarDomain = boxGetVarDomain
 
-instance P.Eq Expr where
-  expr1 == expr2 = expr1.description == expr2.description
+type FormB = Form ExprB
 
--- data UnaryOp = OpNeg | OpAbs | OpExp | OpSine | OpIntPow Integer
-
--- data BinaryOp = OpPlus | OpTimes | OpDiv | OpMax | OpMin
-
--- data Exp
---   = ExpLit Rational
---   | ExpVar Var
---   | ExpUnary UnaryOp Exp
---   | ExpBinary BinaryOp Exp Exp
-
-data BinaryComp = CompLeq
-  deriving (P.Eq)
-
-instance Show BinaryComp where
-  show CompLeq = "<="
-
-data UnaryConn = ConnNeg
-  deriving (P.Eq)
-
-instance Show UnaryConn where
-  show ConnNeg = "¬"
-
-data BinaryConn = ConnAnd | ConnOr | ConnImpl
-  deriving (P.Eq)
-
-instance Show BinaryConn where
-  show ConnAnd = "∧"
-  show ConnOr = "∨"
-  show ConnImpl = "⇒"
-
-data Form
-  = FormComp BinaryComp Expr Expr
-  | FormUnary UnaryConn Form
-  | FormBinary BinaryConn Form Form
-  | FormTrue
-  | FormFalse
-  deriving (P.Eq)
-
-instance Show Form where
-  show (FormComp comp l r) = printf "%s %s %s" (show l) (show comp) (show r)
-  show (FormUnary op l) = printf "%s (%s)" (show op) (show l)
-  show (FormBinary op l r) = printf "(%s) %s (%s)" (show l) (show op) (show r)
-  show FormTrue = "True"
-  show FormFalse = "False"
-
-instance (Applicative m) => BP.CanPruneM m Box Form Boxes where
+instance (Applicative m) => BP.CanPrune m Box FormB Boxes where
   pruneBasicSetM c b = pure (cP, pavingP)
     where
       cP = simplifyOnBox b c
@@ -206,9 +163,10 @@ instance (Applicative m) => BP.CanPruneM m Box Form Boxes where
         _ -> BP.pavingUndecided bSet
       bSet = BP.fromBasicSets [b]
 
-simplifyOnBox :: Box -> Form -> Form
+simplifyOnBox :: Box -> FormB -> FormB
 simplifyOnBox box = simplify
   where
+    simplify :: FormB -> FormB
     simplify (FormComp CompLeq e1 e2) =
       case e1.eval box <= e2.eval box of
         CertainTrue -> FormTrue
@@ -243,41 +201,49 @@ simplifyOnBox box = simplify
     simplify FormTrue = FormTrue
     simplify FormFalse = FormFalse
 
-newtype BoxStack = BoxStack [(Box, Form)]
+newtype BoxStack = BoxStack [(Box, FormB)]
 
-instance BP.IsPriorityQueue BoxStack (Box, Form) where
+instance BP.IsPriorityQueue BoxStack (Box, FormB) where
   singletonQueue e = BoxStack [e]
   queueToList (BoxStack list) = list
   queuePickNext (BoxStack []) = Nothing
   queuePickNext (BoxStack (e : es)) = Just (e, BoxStack es)
   queueAddMany (BoxStack es) new_es = BoxStack (new_es ++ es)
+  queueSplit (BoxStack es)
+    | splitPoint == 0 = Nothing
+    | otherwise = Just (BoxStack esL, BoxStack esR)
+    where
+      splitPoint = length es `divI` 2
+      (esL, esR) = splitAt splitPoint es
+
+  queueMerge (BoxStack stackL) (BoxStack stackR) = BoxStack $ stackL ++ stackR
 
 data BoxBPParams = BoxBPParams
   { scope :: Box,
-    constraint :: Form,
+    constraint :: FormB,
+    maxThreads :: Integer,
     giveUpAccuracy :: Rational
   }
 
-shouldGiveUpOnSet :: Rational -> Boxes -> Bool
-shouldGiveUpOnSet giveUpAccuracy (Boxes boxes) =
-  all giveUpOnBox boxes
+shouldGiveUpOnBox :: Rational -> Box -> Bool
+shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
+  all smallerThanPrec (Map.elems varDomains)
   where
-    giveUpOnBox :: Box -> Bool
-    giveUpOnBox (Box {..}) = all smallerThanPrec (Map.elems varDomains)
     smallerThanPrec :: MPBall -> Bool
     smallerThanPrec ball = diameter <= giveUpAccuracy
       where
-        diameter = 2 * (MP.radius ball)
+        diameter = 2 * MP.radius ball
 
-boxBranchAndPrune :: (MonadLogger m) => BoxBPParams -> m (BP.Paving Boxes)
+boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => BoxBPParams -> m (BP.Result Boxes BoxStack)
 boxBranchAndPrune (BoxBPParams {..}) =
   BP.branchAndPruneM
-    ( BP.ParamsM
+    ( BP.Params
         { BP.scope,
           BP.constraint,
-          BP.goalReached = (\_ -> False) :: BP.Paving Boxes -> Bool,
-          BP.shouldGiveUpOnSet = (shouldGiveUpOnSet giveUpAccuracy) :: Boxes -> Bool,
+          BP.shouldAbort = const False :: BP.Paving Boxes -> Bool,
+          BP.shouldGiveUpOnBasicSet = shouldGiveUpOnBox giveUpAccuracy :: Box -> Bool,
           BP.dummyPriorityQueue,
+          BP.maxThreads,
           BP.dummyMaction = pure ()
         }
     )
