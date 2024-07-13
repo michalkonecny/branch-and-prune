@@ -88,14 +88,26 @@ boxGetVarDomain (Box {..}) var =
 boxAreaD :: Box -> Double
 boxAreaD (Box {..}) = product (map (double . dyadic . MP.radius) (Map.elems varDomains))
 
-newtype Boxes = Boxes {boxes :: [Box]} deriving (P.Eq, Show)
+data Boxes
+  = Boxes [Box]
+  | BoxesUnion [Boxes]
+  deriving (P.Eq, Show)
+
+boxesCount :: Boxes -> Integer
+boxesCount (Boxes boxes) = length boxes
+boxesCount (BoxesUnion union) = sum (map boxesCount union)
+
+boxesAreaD :: Boxes -> Double
+boxesAreaD (Boxes boxes) = sum (map boxAreaD boxes)
+boxesAreaD (BoxesUnion union) = sum (map boxesAreaD union)
 
 instance BP.IsSet Boxes where
   emptySet = Boxes []
   setIsEmpty (Boxes boxes) = null boxes
-  setUnion (Boxes boxes1) (Boxes boxes2) = Boxes (boxes1 ++ boxes2)
-  setShowStats (Boxes boxes) =
-    printf "{|boxes| = %d, area = %3.2f}" (length boxes) (sum (map boxAreaD boxes))
+  setIsEmpty (BoxesUnion union) = List.all BP.setIsEmpty union
+  setUnion bs1 bs2 = BoxesUnion [bs1, bs2]
+  setShowStats bs =
+    printf "{|boxes| = %d, area = %3.2f}" (boxesCount bs) (boxesAreaD bs)
 
 instance BP.SetFromBasic Box Boxes where
   fromBasicSets = Boxes
@@ -104,6 +116,7 @@ instance BP.CanSplitSet Box Boxes where
   splitSet (Boxes boxes) = case boxes of
     [box] -> splitBox box -- split since we should return at least two boxes if possible
     _ -> boxes -- no box or at least two boxes
+  splitSet (BoxesUnion union) = List.concatMap BP.splitSet union
 
 splitBox :: Box -> [Box]
 splitBox box = case box.splitOrder of
