@@ -30,6 +30,7 @@ dependencies:
 - stm
 - mixed-types-num
 - aern2-mp
+- aern2-affarith
 
 ghc-options:
 - -Wall

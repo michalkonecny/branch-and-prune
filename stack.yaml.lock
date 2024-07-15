@@ -11,6 +11,19 @@ packages:
       size: 1060
   original:
     hackage: row-types-1.0.1.2
+- completed:
+    name: aern2-affarith
+    pantry-tree:
+      sha256: ea1abc1442cf9dbf0ee254c7f3e3b4ea025d8eb76573468fd39374f05109a464
+      size: 453
+    sha256: 0d1e1a4d8ff0ce5d4a1e6be4271fc9317885f7fefd0bf06d14d31478db9b3784
+    size: 168148521
+    subdir: aern2-affarith
+    url: https://github.com/michalkonecny/aern2/archive/1fa500516574b348cefcf345654a9068bbf668e3.tar.gz
+    version: 0.2.15.0
+  original:
+    subdir: aern2-affarith
+    url: https://github.com/michalkonecny/aern2/archive/1fa500516574b348cefcf345654a9068bbf668e3.tar.gz
 snapshots:
 - completed:
     sha256: e63b43d506918278d05cd1448bd19352ab2faa9b8e9d64ce527b56f1a7fba149

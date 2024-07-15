@@ -27,6 +27,7 @@ library
   exposed-modules:
       BranchAndPrune.BranchAndPrune
       BranchAndPrune.ExampleInstances.IntSets
+      BranchAndPrune.ExampleInstances.RealConstraintEval.AffArith
       BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall
       BranchAndPrune.ExampleInstances.RealConstraints
       BranchAndPrune.ExampleInstances.SimpleBoxes
@@ -40,7 +41,8 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      aern2-mp
+      aern2-affarith
+    , aern2-mp
     , base >=4.7 && <5
     , containers
     , mixed-types-num
@@ -61,7 +63,8 @@ executable branch-and-prune-example
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      aern2-mp
+      aern2-affarith
+    , aern2-mp
     , base >=4.7 && <5
     , branch-and-prune
     , containers
@@ -86,7 +89,8 @@ test-suite branch-and-prune-test
       test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      aern2-mp
+      aern2-affarith
+    , aern2-mp
     , base >=4.7 && <5
     , branch-and-prune
     , containers

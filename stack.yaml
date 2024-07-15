@@ -46,6 +46,10 @@ packages:
 # extra-deps: []
 extra-deps:
 - row-types-1.0.1.2
+- github: michalkonecny/aern2
+  commit: 1fa500516574b348cefcf345654a9068bbf668e3
+  subdirs:
+  - aern2-affarith
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
