@@ -7,6 +7,8 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- |
 -- This module provides the ingredients needed to apply the branch and bound algorithm to
@@ -79,12 +81,6 @@ mkBox varDomainsRational =
         mR = (lR + uR) / 2
         rR = (uR - lR) / 2
 
-boxGetVarDomain :: Box -> Var -> MP.MPBall
-boxGetVarDomain (Box {..}) var =
-  case Map.lookup var varDomains of
-    Nothing -> error $ printf "variable %s not present in box %s" var (show varDomains)
-    Just dom -> dom
-
 boxAreaD :: Box -> Double
 boxAreaD (Box {..}) = product (map (double . dyadic . MP.radius) (Map.elems varDomains))
 
@@ -143,17 +139,13 @@ splitMPBall b = (bL, bU)
     bL = fromMPBallEndpoints l m
     bU = fromMPBallEndpoints m u
 
-type ExprB = Expr Box MPBall
+type ExprB r = Expr Box r
 
-instance CanGetLiteral Box MPBall where
-  getLiteral box = MP.mpBallP (MP.getPrecision box)
+type FormB r = Form (ExprB r)
 
-instance CanGetVarDomain Box MPBall where
-  getVarDomain = boxGetVarDomain
+type HasKleenanComparison r = (HasOrder r r, OrderCompareType r r ~ Kleenean)
 
-type FormB = Form ExprB
-
-instance (Applicative m) => BP.CanPrune m Box FormB Boxes where
+instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m Box (FormB r) Boxes where
   pruneBasicSetM c b = pure (cP, pavingP)
     where
       cP = simplifyOnBox b c
@@ -163,10 +155,10 @@ instance (Applicative m) => BP.CanPrune m Box FormB Boxes where
         _ -> BP.pavingUndecided bSet
       bSet = BP.fromBasicSets [b]
 
-simplifyOnBox :: Box -> FormB -> FormB
+simplifyOnBox :: (HasKleenanComparison r) => Box -> FormB r -> FormB r
 simplifyOnBox box = simplify
   where
-    simplify :: FormB -> FormB
+    simplify :: (HasKleenanComparison r) => FormB r -> FormB r
     simplify (FormComp CompLeq e1 e2) =
       case e1.eval box <= e2.eval box of
         CertainTrue -> FormTrue
@@ -201,9 +193,9 @@ simplifyOnBox box = simplify
     simplify FormTrue = FormTrue
     simplify FormFalse = FormFalse
 
-newtype BoxStack = BoxStack [(Box, FormB)]
+newtype BoxStack r = BoxStack [(Box, FormB r)]
 
-instance BP.IsPriorityQueue BoxStack (Box, FormB) where
+instance BP.IsPriorityQueue (BoxStack r) (Box, FormB r) where
   singletonQueue e = BoxStack [e]
   queueToList (BoxStack list) = list
   queuePickNext (BoxStack []) = Nothing
@@ -218,9 +210,9 @@ instance BP.IsPriorityQueue BoxStack (Box, FormB) where
 
   queueMerge (BoxStack stackL) (BoxStack stackR) = BoxStack $ stackL ++ stackR
 
-data BoxBPParams = BoxBPParams
+data BoxBPParams r = BoxBPParams
   { scope :: Box,
-    constraint :: FormB,
+    constraint :: FormB r,
     maxThreads :: Integer,
     giveUpAccuracy :: Rational
   }
@@ -234,7 +226,7 @@ shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
       where
         diameter = 2 * MP.radius ball
 
-boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => BoxBPParams -> m (BP.Result Boxes BoxStack)
+boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) => BoxBPParams r -> m (BP.Result Boxes (BoxStack r))
 boxBranchAndPrune (BoxBPParams {..}) =
   BP.branchAndPruneM
     ( BP.Params
@@ -248,5 +240,5 @@ boxBranchAndPrune (BoxBPParams {..}) =
         }
     )
   where
-    dummyPriorityQueue :: BoxStack
+    dummyPriorityQueue :: BoxStack r
     dummyPriorityQueue = BoxStack [(undefined :: Box, FormFalse)]

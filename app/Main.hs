@@ -28,10 +28,12 @@ import GHC.Records
 import MixedTypesNumPrelude
 import System.Environment (getArgs)
 import qualified Prelude as P
+import BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall
+import AERN2.MP (MPBall)
 
 data Problem = Problem
   { scope :: Box,
-    constraint :: FormB
+    constraint :: FormB MPBall
   }
 
 problems :: Rational -> Map.Map String Problem
@@ -51,7 +53,7 @@ problems eps =
       )
     ]
 
-x, y, z :: ExprB
+x, y, z :: ExprB MPBall
 x = exprVar "x"
 y = exprVar "y"
 z = exprVar "z"
