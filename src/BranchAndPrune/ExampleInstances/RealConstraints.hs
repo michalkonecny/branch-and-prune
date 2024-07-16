@@ -25,6 +25,7 @@ module BranchAndPrune.ExampleInstances.RealConstraints
   )
 where
 
+import Data.Set as Set
 import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
@@ -34,75 +35,91 @@ type Var = String
 
 {- Non-linear Expressions -}
 
-data Expr s r = Expr {eval :: s -> r, description :: String}
+data Expr b r = Expr {eval :: b -> r, vars :: Set.Set Var, sampleR :: r, description :: String}
 
-class CanGetVarDomain s r where
-  getVarDomain :: s -> Var -> r
+class CanGetVarDomain b r where
+  getVarDomain :: r -> b -> Var -> r
 
-exprVar :: (CanGetVarDomain s r) => Var -> Expr s r
-exprVar var = Expr {eval = (`getVarDomain` var), description = var}
+exprVar :: (CanGetVarDomain b r) => r -> Var -> Expr b r
+exprVar sampleR var =
+  Expr
+    { eval = \b -> getVarDomain sampleR b var,
+      vars = Set.singleton var,
+      sampleR,
+      description = var
+    }
 
-class CanGetLiteral s r where
-  getLiteral :: s -> Rational -> r
+class CanGetLiteral b r where
+  getLiteral :: r -> b -> Rational -> r
 
-exprLit :: (CanGetLiteral s r) => Rational -> Expr s r
-exprLit literal = Expr {eval, description = show (double literal)}
+exprLit :: (CanGetLiteral b r) => r -> Rational -> Expr b r
+exprLit sampleR literal = Expr {eval, vars = Set.empty, sampleR, description = show (double literal)}
   where
-    eval scope = getLiteral scope literal
+    eval scope = getLiteral sampleR scope literal
 
-instance Show (Expr s r) where
+instance Show (Expr b r) where
   show expr = expr.description
 
-instance P.Eq (Expr s r) where
+instance P.Eq (Expr b r) where
   expr1 == expr2 = expr1.description == expr2.description
 
-exprNeg :: (CanNegSameType r) => Expr s r -> Expr s r
-exprNeg (Expr eval1 desc1) =
-  Expr {eval = negate . eval1, description = printf "-(%s)" desc1}
+exprNeg :: (CanNegSameType r) => Expr b r -> Expr b r
+exprNeg e =
+  e {eval = negate . e.eval, description = printf "-(%b)" e.description}
 
-exprPlus :: (CanAddSameType r) => Expr s r -> Expr s r -> Expr s r
-exprPlus (Expr eval1 desc1) (Expr eval2 desc2) =
-  Expr {eval = \b -> eval1 b + eval2 b, description = printf "(%s) + (%s)" desc1 desc2}
+exprPlus :: (CanAddSameType r) => Expr b r -> Expr b r -> Expr b r
+exprPlus e1 e2 =
+  Expr
+    { eval = \b -> e1.eval b + e2.eval b,
+      vars = e1.vars `Set.union` e2.vars,
+      sampleR = e1.sampleR,
+      description = printf "(%b) + (%b)" e1.description e2.description
+    }
 
-exprTimes :: (CanMulSameType r) => Expr s r -> Expr s r -> Expr s r
-exprTimes (Expr eval1 desc1) (Expr eval2 desc2) =
-  Expr {eval = \b -> eval1 b * eval2 b, description = printf "(%s)*(%s)" desc1 desc2}
+exprTimes :: (CanMulSameType r) => Expr b r -> Expr b r -> Expr b r
+exprTimes e1 e2 =
+  Expr
+    { eval = \b -> e1.eval b * e2.eval b,
+      vars = e1.vars `Set.union` e2.vars,
+      sampleR = e1.sampleR,
+      description = printf "(%b)*(%b)" e1.description e2.description
+    }
 
 -- Instances to conveniently build expressions using the usual numerical operators
 
-instance (CanNegSameType r) => CanNeg (Expr s r) where
-  type NegType (Expr s r) = Expr s r
+instance (CanNegSameType r) => CanNeg (Expr b r) where
+  type NegType (Expr b r) = Expr b r
   negate = exprNeg
 
-instance (CanAddSameType r) => CanAddAsymmetric (Expr s r) (Expr s r) where
-  type AddType (Expr s r) (Expr s r) = (Expr s r)
+instance (CanAddSameType r) => CanAddAsymmetric (Expr b r) (Expr b r) where
+  type AddType (Expr b r) (Expr b r) = (Expr b r)
   add = exprPlus
 
-instance (CanAddSameType r, CanGetLiteral s r) => CanAddAsymmetric (Expr s r) Rational where
-  type AddType (Expr s r) Rational = (Expr s r)
-  add e q = exprPlus e (exprLit q)
+instance (CanAddSameType r, CanGetLiteral b r) => CanAddAsymmetric (Expr b r) Rational where
+  type AddType (Expr b r) Rational = (Expr b r)
+  add e q = exprPlus e (exprLit e.sampleR q)
 
-instance (CanAddSameType r, CanGetLiteral s r) => CanAddAsymmetric Rational (Expr s r) where
-  type AddType Rational (Expr s r) = (Expr s r)
-  add q = exprPlus (exprLit q)
+instance (CanAddSameType r, CanGetLiteral b r) => CanAddAsymmetric Rational (Expr b r) where
+  type AddType Rational (Expr b r) = (Expr b r)
+  add q e = exprPlus (exprLit e.sampleR q) e
 
-instance (CanNegSameType r, CanAddSameType r) => CanSub (Expr s r) (Expr s r)
+instance (CanNegSameType r, CanAddSameType r) => CanSub (Expr b r) (Expr b r)
 
-instance (CanAddSameType r, CanGetLiteral s r) => CanSub (Expr s r) Rational
+instance (CanAddSameType r, CanGetLiteral b r) => CanSub (Expr b r) Rational
 
-instance (CanNegSameType r, CanAddSameType r, CanGetLiteral s r) => CanSub Rational (Expr s r)
+instance (CanNegSameType r, CanAddSameType r, CanGetLiteral b r) => CanSub Rational (Expr b r)
 
-instance (CanMulSameType r) => CanMulAsymmetric (Expr s r) (Expr s r) where
-  type MulType (Expr s r) (Expr s r) = (Expr s r)
+instance (CanMulSameType r) => CanMulAsymmetric (Expr b r) (Expr b r) where
+  type MulType (Expr b r) (Expr b r) = (Expr b r)
   mul = exprTimes
 
-instance (CanMulSameType r, CanGetLiteral s r) => CanMulAsymmetric (Expr s r) Rational where
-  type MulType (Expr s r) Rational = (Expr s r)
-  mul e q = exprTimes e (exprLit q)
+instance (CanMulSameType r, CanGetLiteral b r) => CanMulAsymmetric (Expr b r) Rational where
+  type MulType (Expr b r) Rational = (Expr b r)
+  mul e q = exprTimes e (exprLit e.sampleR q)
 
-instance (CanMulSameType r, CanGetLiteral s r) => CanMulAsymmetric Rational (Expr s r) where
-  type MulType Rational (Expr s r) = (Expr s r)
-  mul q = exprTimes (exprLit q)
+instance (CanMulSameType r, CanGetLiteral b r) => CanMulAsymmetric Rational (Expr b r) where
+  type MulType Rational (Expr b r) = (Expr b r)
+  mul q e = exprTimes (exprLit e.sampleR q) e
 
 {- Simple formulas over comparisons of expressions -}
 
@@ -136,13 +153,13 @@ data Form expr
 
 instance (Show expr) => Show (Form expr) where
   show :: Form expr -> String
-  show (FormComp comp l r) = printf "%s %s %s" (show l) (show comp) (show r)
-  show (FormUnary op l) = printf "%s (%s)" (show op) (show l)
-  show (FormBinary op l r) = printf "(%s) %s (%s)" (show l) (show op) (show r)
+  show (FormComp comp l r) = printf "%b %b %b" (show l) (show comp) (show r)
+  show (FormUnary op l) = printf "%b (%b)" (show op) (show l)
+  show (FormBinary op l r) = printf "(%b) %b (%b)" (show l) (show op) (show r)
   show FormTrue = "True"
   show FormFalse = "False"
 
-formLeq :: Expr s r -> Expr s r -> Form (Expr s r)
+formLeq :: Expr b r -> Expr b r -> Form (Expr b r)
 formLeq = FormComp CompLeq
 
 formNeg :: Form expr -> Form expr
@@ -169,17 +186,17 @@ instance ConvertibleExactly Bool (Form expr) where
   safeConvertExactly True = Right FormTrue
   safeConvertExactly False = Right FormFalse
 
-instance HasOrderAsymmetric (Expr s r) (Expr s r) where
-  type OrderCompareType (Expr s r) (Expr s r) = Form (Expr s r)
+instance HasOrderAsymmetric (Expr b r) (Expr b r) where
+  type OrderCompareType (Expr b r) (Expr b r) = Form (Expr b r)
   leq = formLeq
   lessThan = undefined
 
-instance (CanGetLiteral s r) => HasOrderAsymmetric (Expr s r) Rational where
-  type OrderCompareType (Expr s r) Rational = Form (Expr s r)
-  leq (e :: e) q = formLeq e ((exprLit q) :: e)
+instance (CanGetLiteral b r) => HasOrderAsymmetric (Expr b r) Rational where
+  type OrderCompareType (Expr b r) Rational = Form (Expr b r)
+  leq (e :: e) q = formLeq e (exprLit e.sampleR q :: e)
   lessThan = undefined
 
-instance (CanGetLiteral s r) => HasOrderAsymmetric Rational (Expr s r) where
-  type OrderCompareType Rational (Expr s r) = Form (Expr s r)
-  leq q (e :: e) = formLeq ((exprLit q) :: e) e
+instance (CanGetLiteral b r) => HasOrderAsymmetric Rational (Expr b r) where
+  type OrderCompareType Rational (Expr b r) = Form (Expr b r)
+  leq q (e :: e) = formLeq (exprLit e.sampleR q :: e) e
   lessThan = undefined

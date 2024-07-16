@@ -1,25 +1,28 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module BranchAndPrune.ExampleInstances.RealConstraintEval.AffArith () where
 
-import AERN2.AffArith
-import AERN2.MP (MPBall)
-import qualified AERN2.MP as MP
+import AERN2.AffArith (MPAffine)
+import qualified AERN2.AffArith as Aff
 import BranchAndPrune.ExampleInstances.RealConstraints
 import BranchAndPrune.ExampleInstances.SimpleBoxes
 import qualified Data.Map as Map
 import Text.Printf (printf)
 
-boxGetVarDomain :: Box -> Var -> MP.MPBall
-boxGetVarDomain (Box {..}) var =
+boxGetVarDomain :: MPAffine -> Box -> Var -> MPAffine
+boxGetVarDomain sampleAff (Box {varDomains}) var =
   case Map.lookup var varDomains of
     Nothing -> error $ printf "variable %s not present in box %s" var (show varDomains)
-    Just dom -> dom
+    Just dom -> Aff.mpAffineFromBall sampleAff.config errId dom
+    where
+      errId = var -- using variable's name as the error variable ID
 
-instance CanGetLiteral Box MPBall where
-  getLiteral box = MP.mpBallP (MP.getPrecision box)
 
-instance CanGetVarDomain Box MPBall where
+instance CanGetLiteral Box MPAffine where
+  getLiteral sampleAff _box = Aff.mpAffine sampleAff.config
+
+instance CanGetVarDomain Box MPAffine where
   getVarDomain = boxGetVarDomain

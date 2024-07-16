@@ -29,7 +29,9 @@ import MixedTypesNumPrelude
 import System.Environment (getArgs)
 import qualified Prelude as P
 import BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall
-import AERN2.MP (MPBall)
+import AERN2.MP (MPBall, mpBallP)
+import qualified AERN2.MP as MP
+
 
 data Problem = Problem
   { scope :: Box,
@@ -54,9 +56,11 @@ problems eps =
     ]
 
 x, y, z :: ExprB MPBall
-x = exprVar "x"
-y = exprVar "y"
-z = exprVar "z"
+x = exprVar sampleMPBall "x"
+y = exprVar sampleMPBall "y"
+z = exprVar sampleMPBall "z"
+
+sampleMPBall = mpBallP MP.defaultPrecision 0
 
 processArgs :: IO (Problem, Rational, Integer, Bool)
 processArgs = do
