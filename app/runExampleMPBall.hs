@@ -4,7 +4,7 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Main (main) where
+module Main where
 
 import BranchAndPrune.BranchAndPrune (Result (Result), showPavingSummary)
 import BranchAndPrune.ExampleInstances.RealConstraints
@@ -60,6 +60,7 @@ x = exprVar sampleMPBall "x"
 y = exprVar sampleMPBall "y"
 z = exprVar sampleMPBall "z"
 
+sampleMPBall :: MPBall
 sampleMPBall = mpBallP MP.defaultPrecision 0
 
 processArgs :: IO (Problem, Rational, Integer, Bool)

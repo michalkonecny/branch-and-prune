@@ -47,8 +47,18 @@ library:
   source-dirs: src
 
 executables:
-  branch-and-prune-example:
-    main:                Main.hs
+  branch-and-prune-example-ball-arith:
+    main:                runExampleMPBall.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - branch-and-prune
+
+  branch-and-prune-example-affine-arith:
+    main:                runExampleMPAffine.hs
     source-dirs:         app
     ghc-options:
     - -threaded

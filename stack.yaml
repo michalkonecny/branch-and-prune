@@ -47,7 +47,7 @@ packages:
 extra-deps:
 - row-types-1.0.1.2
 - github: michalkonecny/aern2
-  commit: 1fa500516574b348cefcf345654a9068bbf668e3
+  commit: ddbb4a940f570384fb19e6cc237221f14a7e1e44
   subdirs:
   - aern2-affarith
 
