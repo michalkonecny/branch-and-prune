@@ -53,31 +53,8 @@ library
     , unliftio-core
   default-language: Haskell2010
 
-executable branch-and-prune-example-affine-arith
-  main-is: runExampleMPAffine.hs
-  other-modules:
-      Paths_branch_and_prune
-  autogen-modules:
-      Paths_branch_and_prune
-  hs-source-dirs:
-      app
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      aern2-affarith
-    , aern2-mp
-    , base >=4.7 && <5
-    , branch-and-prune
-    , containers
-    , mixed-types-num
-    , monad-logger
-    , stm
-    , text
-    , time
-    , unliftio-core
-  default-language: Haskell2010
-
-executable branch-and-prune-example-ball-arith
-  main-is: runExampleMPBall.hs
+executable branch-and-prune-example
+  main-is: runExample.hs
   other-modules:
       Paths_branch_and_prune
   autogen-modules:
