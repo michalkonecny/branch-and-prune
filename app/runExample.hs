@@ -62,6 +62,18 @@ problems (sampleR :: r) eps =
           { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
             constraint = (x * x - 2.0 * x * y + y * y <= 1.0) `formImpl` (x - y <= 1.0 + eps)
           }
+      ),
+      ( "quadraticReduction",
+        Problem
+          { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
+            constraint = (2.0 * x * x - 4.0 * x + 2.0 + y <= (- 4.0) * (x - 1.0) + y + eps)
+          }
+      ),
+      ( "cubicReduction",
+        Problem
+          { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
+            constraint = (6.0 * x * x * x + x * x - 10.0 * x + 3.0 + y <= (x - 1.0) * (x - 4.5) + y + eps)
+          }
       )
     ]
   where
