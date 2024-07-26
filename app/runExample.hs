@@ -98,7 +98,7 @@ processArgs _ _ = error "failed to match parameters"
 --
 -- > time branch-and-prune-example intervalArith transitivityEps 0.005 4 a +RTS -N4
 --
--- > time branch-and-prune-example affineArith circleEps 0.001 4 nodebug +RTS -N4
+-- > time branch-and-prune-example affineArith cubicReduction 0.001 4 nodebug +RTS -N4
 main :: IO ()
 main = do
   (arith : args) <- getArgs
