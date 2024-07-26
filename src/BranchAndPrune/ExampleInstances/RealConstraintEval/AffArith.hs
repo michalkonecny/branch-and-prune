@@ -1,8 +1,3 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE NamedFieldPuns #-}
-
 module BranchAndPrune.ExampleInstances.RealConstraintEval.AffArith () where
 
 import AERN2.AffArith (MPAffine)

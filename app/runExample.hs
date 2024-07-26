@@ -1,11 +1,4 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RebindableSyntax #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
 
 module Main (main) where
 
@@ -44,8 +37,8 @@ data Problem r = Problem
     constraint :: FormB r
   }
 
-type ProblemR r = (CanGetVarDomain Box r, CanGetLiteral Box r, 
-  CanAddSameType r, CanMulSameType r, CanNegSameType r, 
+type ProblemR r = (CanGetVarDomain Box r, CanGetLiteral Box r,
+  CanAddSameType r, CanMulSameType r, CanNegSameType r,
   HasOrderAsymmetric r r, OrderCompareType r r ~ Kleenean)
 
 problems :: (ProblemR r) => r -> Rational -> Map.Map String (Problem r)
@@ -66,13 +59,13 @@ problems (sampleR :: r) eps =
       ( "quadraticReduction",
         Problem
           { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
-            constraint = (2.0 * x * x - 4.0 * x + 2.0 + y <= (- 4.0) * (x - 1.0) + y + eps)
+            constraint = 2.0 * x * x - 4.0 * x + 2.0 + y <= (- 4.0) * (x - 1.0) + y + eps
           }
       ),
       ( "cubicReduction",
         Problem
           { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
-            constraint = (6.0 * x * x * x + x * x - 10.0 * x + 3.0 + y <= (x - 1.0) * (x - 4.5) + y + eps)
+            constraint = 6.0 * x * x * x + x * x - 10.0 * x + 3.0 + y <= (x - 1.0) * (x - 4.5) + y + eps
           }
       )
     ]

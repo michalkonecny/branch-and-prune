@@ -1,7 +1,3 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RecordWildCards #-}
-
 module BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall () where
 
 import AERN2.MP (MPBall)

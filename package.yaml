@@ -32,6 +32,13 @@ dependencies:
 - aern2-mp
 - aern2-affarith
 
+default-extensions:
+- GHC2021
+- DuplicateRecordFields
+- RecordWildCards
+- OverloadedRecordDot
+- TypeFamilies
+
 ghc-options:
 - -Wall
 - -Wcompat
@@ -42,6 +49,7 @@ ghc-options:
 - -Wmissing-home-modules
 - -Wpartial-fields
 - -Wredundant-constraints
+- -Wno-orphans
 
 library:
   source-dirs: src
