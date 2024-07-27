@@ -1,8 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE RecordWildCards #-}
-
 -- |
 -- This module impements very simple constraints over sets of integers and
 -- all the ingredients needed to apply the branch and bound algorithm to

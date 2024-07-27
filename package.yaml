@@ -30,6 +30,14 @@ dependencies:
 - stm
 - mixed-types-num
 - aern2-mp
+- aern2-affarith
+
+default-extensions:
+- GHC2021
+- DuplicateRecordFields
+- RecordWildCards
+- OverloadedRecordDot
+- TypeFamilies
 
 ghc-options:
 - -Wall
@@ -41,13 +49,14 @@ ghc-options:
 - -Wmissing-home-modules
 - -Wpartial-fields
 - -Wredundant-constraints
+- -Wno-orphans
 
 library:
   source-dirs: src
 
 executables:
   branch-and-prune-example:
-    main:                Main.hs
+    main:                runExample.hs
     source-dirs:         app
     ghc-options:
     - -threaded
