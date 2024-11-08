@@ -4,7 +4,6 @@
 -- |
 -- This module provides the ingredients needed to apply the branch and bound algorithm to
 -- solve real constraints with very simple pruning based only on straightforward interval evaluation.
---
 module BranchAndPrune.ExampleInstances.SimpleBoxes
   ( Var,
     Box (..),
@@ -19,20 +18,21 @@ module BranchAndPrune.ExampleInstances.SimpleBoxes
 where
 
 import AERN2.MP (Kleenean (..), MPBall)
-import qualified AERN2.MP as MP
+import AERN2.MP qualified as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
 import AERN2.MP.Dyadic (dyadic)
-import qualified BranchAndPrune.BranchAndPrune as BP
+import BranchAndPrune.BranchAndPrune qualified as BP
 import BranchAndPrune.ExampleInstances.RealConstraints
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.List (sortOn)
-import qualified Data.List as List
-import qualified Data.Map as Map
+import Data.List qualified as List
+import Data.Map qualified as Map
 import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
-import qualified Prelude as P
+import Prelude qualified as P
+import AERN2.MP.Ball (CentreRadius(CentreRadius))
 
 {- N-dimensional Boxes -}
 
@@ -67,7 +67,7 @@ mkBox varDomainsRational =
       splitOrder = map fst varDomainsRational
     }
   where
-    toBall (var, (lR, uR)) = (var, MP.mpBall (mR, rR))
+    toBall (var, (lR, uR)) = (var, MP.mpBall (CentreRadius mR rR))
       where
         mR = (lR + uR) / 2
         rR = (uR - lR) / 2
@@ -134,7 +134,12 @@ type ExprB r = Expr Box r
 
 type FormB r = Form (ExprB r)
 
-type HasKleenanComparison r = (HasOrder r r, OrderCompareType r r ~ Kleenean)
+type HasKleenanComparison r =
+  ( HasOrder r r,
+    OrderCompareType r r ~ Kleenean,
+    HasEq r r,
+    EqCompareType r r ~ Kleenean
+  )
 
 instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m Box (FormB r) Boxes where
   pruneBasicSetM c b = pure (cP, pavingP)
@@ -152,6 +157,11 @@ simplifyOnBox box = simplify
     simplify :: (HasKleenanComparison r) => FormB r -> FormB r
     simplify (FormComp CompLeq e1 e2) =
       case e1.eval box <= e2.eval box of
+        CertainTrue -> FormTrue
+        CertainFalse -> FormFalse
+        TrueOrFalse -> FormComp CompLeq e1 e2
+    simplify (FormComp CompEq e1 e2) =
+      case e1.eval box == e2.eval box of
         CertainTrue -> FormTrue
         CertainFalse -> FormFalse
         TrueOrFalse -> FormComp CompLeq e1 e2

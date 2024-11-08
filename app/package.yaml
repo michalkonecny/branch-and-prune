@@ -1,14 +1,10 @@
-name:                branch-and-prune
+name:                branch-and-prune-example
 version:             0.1.0.0
 github:              "githubuser/branch-and-prune"
 license:             BSD-3-Clause
-author:              "Michal Konecny, Junaid Rasheed"
-maintainer:          "mikkonecny@gmail.com"
-copyright:           "2024 Michal Konecny, Junaid Rasheed"
-
-extra-source-files:
-- README.md
-- CHANGELOG.md
+author:              "Author name here"
+maintainer:          "example@example.com"
+copyright:           "2024 Author name here"
 
 # Metadata used when publishing your package
 # synopsis:            Short description of your package
@@ -51,27 +47,13 @@ ghc-options:
 - -Wredundant-constraints
 - -Wno-orphans
 
-library:
-  source-dirs: src
-
-# executables:
-#   branch-and-prune-example:
-#     main:                runExample.hs
-#     source-dirs:         app
-#     ghc-options:
-#     - -threaded
-#     - -rtsopts
-#     - -with-rtsopts=-N
-#     dependencies:
-#     - branch-and-prune
-
-tests:
-  branch-and-prune-test:
-    defaults: hspec/hspec@main
+executables:
+  branch-and-prune-example:
+    main:                runExample.hs
+    source-dirs:         .
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - hspec
     - branch-and-prune

@@ -1,0 +1,8 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "branch-and-prune:lib"
+    - path: "./test"
+      component: "branch-and-prune:test:branch-and-prune-test"
+    - path: "./app"
+      component: "branch-and-prune-example:exe:branch-and-prune-example"

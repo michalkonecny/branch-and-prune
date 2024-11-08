@@ -12,18 +12,32 @@ packages:
   original:
     hackage: row-types-1.0.1.2
 - completed:
+    hackage: mixed-types-num-0.6.2@sha256:b81f53db64835e43764ce8c25820ee3ed95693d13dec8eb5981eaef168d72663,3245
+    pantry-tree:
+      sha256: b668482a5c7e48635f09a5610b39c091c1a61360882965c43ab6ed41725df912
+      size: 2593
+  original:
+    hackage: mixed-types-num-0.6.2
+- completed:
+    hackage: aern2-mp-0.2.16.1@sha256:13330cd0ce232f80a23e600d9d1ab01a6e66107841ecc60d20a5da4d6ee06157,3432
+    pantry-tree:
+      sha256: 895d385a3ee6ddf8d0c9cd941976f0954ccc8dfc598722590a6d9e7d0fb86145
+      size: 2941
+  original:
+    hackage: aern2-mp-0.2.16.1
+- completed:
     name: aern2-affarith
     pantry-tree:
-      sha256: 742486ced240c308f384c543479eeeabd9ed4d1ffb94bc116d9bf91fd75dfe16
-      size: 461
-    sha256: 1428149bcab5ce9fa1ab4c3fd990fd875ef46f40756c8f504235a6d11befea12
-    size: 168148830
+      sha256: 88a66c4c675db155a3a73b8b3768bdb9a65d06724c3ff67648aa526c540ceb4a
+      size: 922
+    sha256: e26e83221953b43bd83a2baaa1c150e2df77e2b8e50b279cf86d9546afd70207
+    size: 168152731
     subdir: aern2-affarith
-    url: https://github.com/michalkonecny/aern2/archive/ddbb4a940f570384fb19e6cc237221f14a7e1e44.tar.gz
-    version: 0.2.15.0
+    url: https://github.com/michalkonecny/aern2/archive/b9ec190cf9e2e165672b56e11690ae172fee3cde.tar.gz
+    version: 0.2.16.0
   original:
     subdir: aern2-affarith
-    url: https://github.com/michalkonecny/aern2/archive/ddbb4a940f570384fb19e6cc237221f14a7e1e44.tar.gz
+    url: https://github.com/michalkonecny/aern2/archive/b9ec190cf9e2e165672b56e11690ae172fee3cde.tar.gz
 snapshots:
 - completed:
     sha256: e63b43d506918278d05cd1448bd19352ab2faa9b8e9d64ce527b56f1a7fba149

@@ -55,6 +55,18 @@ exprNeg :: (CanNegSameType r) => Expr b r -> Expr b r
 exprNeg e =
   e {eval = negate . e.eval, description = printf "-(%b)" e.description}
 
+exprSqrt :: (CanSqrtSameType r) => Expr b r -> Expr b r
+exprSqrt e =
+  e {eval = sqrt . e.eval, description = printf "sqrt(%b)" e.description}
+
+exprSin :: (CanSinCosSameType r) => Expr b r -> Expr b r
+exprSin e =
+  e {eval = sin . e.eval, description = printf "sin(%b)" e.description}
+
+exprCos :: (CanSinCosSameType r) => Expr b r -> Expr b r
+exprCos e =
+  e {eval = cos . e.eval, description = printf "cos(%b)" e.description}
+
 exprPlus :: (CanAddSameType r) => Expr b r -> Expr b r -> Expr b r
 exprPlus e1 e2 =
   Expr
@@ -78,6 +90,15 @@ exprTimes e1 e2 =
 instance (CanNegSameType r) => CanNeg (Expr b r) where
   type NegType (Expr b r) = Expr b r
   negate = exprNeg
+
+instance (CanSqrtSameType r) => CanSqrt (Expr b r) where
+  type SqrtType (Expr b r) = Expr b r
+  sqrt = exprSqrt
+
+instance (CanSinCosSameType r) => CanSinCos (Expr b r) where
+  type SinCosType (Expr b r) = Expr b r
+  sin = exprSin
+  cos = exprCos
 
 instance (CanAddSameType r) => CanAddAsymmetric (Expr b r) (Expr b r) where
   type AddType (Expr b r) (Expr b r) = (Expr b r)
@@ -111,11 +132,12 @@ instance (CanMulSameType r, CanGetLiteral b r) => CanMulAsymmetric Rational (Exp
 
 {- Simple formulas over comparisons of expressions -}
 
-data BinaryComp = CompLeq
+data BinaryComp = CompLeq | CompEq
   deriving (P.Eq)
 
 instance Show BinaryComp where
   show CompLeq = "<="
+  show CompEq = "=="
 
 data UnaryConn = ConnNeg
   deriving (P.Eq)
@@ -149,6 +171,9 @@ instance (Show expr) => Show (Form expr) where
 
 formLeq :: Expr b r -> Expr b r -> Form (Expr b r)
 formLeq = FormComp CompLeq
+
+formEq :: Expr b r -> Expr b r -> Form (Expr b r)
+formEq = FormComp CompEq
 
 formNeg :: Form expr -> Form expr
 formNeg = FormUnary ConnNeg
@@ -188,3 +213,15 @@ instance (CanGetLiteral b r) => HasOrderAsymmetric Rational (Expr b r) where
   type OrderCompareType Rational (Expr b r) = Form (Expr b r)
   leq q (e :: e) = formLeq (exprLit e.sampleR q :: e) e
   lessThan = undefined
+
+instance HasEqAsymmetric (Expr b r) (Expr b r) where
+  type EqCompareType (Expr b r) (Expr b r) = Form (Expr b r)
+  equalTo = formEq
+
+instance (CanGetLiteral b r) => HasEqAsymmetric (Expr b r) Rational where
+  type EqCompareType (Expr b r) Rational = Form (Expr b r)
+  equalTo (e :: e) q = formEq e (exprLit e.sampleR q :: e)
+
+instance (CanGetLiteral b r) => HasEqAsymmetric Rational (Expr b r) where
+  type EqCompareType Rational (Expr b r) = Form (Expr b r)
+  equalTo q (e :: e) = formEq (exprLit e.sampleR q :: e) e
