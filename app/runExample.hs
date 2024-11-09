@@ -24,7 +24,8 @@ import BranchAndPrune.ExampleInstances.SimpleBoxes
   )
 import Control.Monad.IO.Unlift (MonadIO (liftIO), MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, NoLoggingT (runNoLoggingT), runStdoutLoggingT)
-import Data.Map as Map
+import qualified Data.List as List
+import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 -- import GHC.Records
 import MixedTypesNumPrelude
@@ -88,29 +89,29 @@ problems (sampleR :: r) eps =
         Problem
           { scope = mkBox [("r1", (-3819831 / 4194304, 7639661 / 8388608)), ("x", (-6851933 / 8388608, 6851933 / 8388608))],
             constraint =
-              ( (x <= 1 / 67108864 && -x <= 1 / 67108864)
-                  `formImpl` (r1 == x)
-              )
-                && ( not ((x <= 1 / 67108864 && -x <= 1 / 67108864))
-                       `formImpl` ( let t =
-                                          ( ( x
-                                                * ( ( ( ( ((-3350387 / 17179869184) * (x * x))
-                                                            + (4473217 / 536870912)
-                                                        )
-                                                          * (x * x)
-                                                      )
-                                                        + (-349525 / 2097152)
-                                                    )
-                                                      * (x * x)
-                                                  )
-                                            )
-                                              + x
-                                          )
-                                     in (r1 <= t + (4498891 / 100000000000000))
-                                          && ((t - (4498891 / 100000000000000)) <= r1)
+              let t =
+                    ( ( x
+                          * ( ( ( ( ((-3350387 / 17179869184) * (x * x))
+                                      + (4473217 / 536870912)
                                   )
-                   )
-                && (not ((r1 + (-1.0 * (sin x))) <= (58 * (1 / 1000000000))))
+                                    * (x * x)
+                                )
+                                  + (-349525 / 2097152)
+                              )
+                                * (x * x)
+                            )
+                      )
+                        + x
+                    )
+               in ((x <= 1 / 67108864 && -x <= 1 / 67108864) `formImpl` (r1 == x))
+                    && ( (not ((x <= 1 / 67108864 && -x <= 1 / 67108864)))
+                           `formImpl` ( (r1 <= t + (4498891 / 100000000000000))
+                                          && ((t - (4498891 / 100000000000000)) <= r1)
+                                      )
+                       )
+                    && ((r1 == x) || (r1 <= t + (4498891 / 100000000000000))
+                                          && ((t - (4498891 / 100000000000000)) <= r1))
+                    && (not ((r1 + (-1.0 * (sin x))) <= (58 * (1 / 1000000000)) + eps))
           }
       )
     ]
@@ -121,23 +122,30 @@ problems (sampleR :: r) eps =
     r1 = exprVar sampleR "r1" :: ExprB r
 
 sampleMPBall :: MPBall
-sampleMPBall = mpBallP MP.defaultPrecision 0
+sampleMPBall = mpBallP (MP.prec 1000) 0
 
 sampleMPAffine :: MPAffine
 sampleMPAffine = MPAffine _conf (convertExactly 0) Map.empty
   where
     _conf :: MPAffineConfig
-    _conf = MPAffineConfig {maxTerms = int 5, precision = 100}
+    _conf = MPAffineConfig {maxTerms = int 10, precision = 1000}
 
 processArgs :: (ProblemR r) => r -> [String] -> (Problem r, Rational, Integer, Bool)
-processArgs sampleR [probS, epsS, maxThreadsS, debugS] =
-  (prob, eps, maxThreads, debug)
+processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, debugS] =
+  (prob, giveUpAccuracy, maxThreads, debug)
   where
-    eps = toRational (read epsS :: Double)
     prob = fromJust $ Map.lookup probS (problems sampleR eps)
+    eps = toRational (read epsS :: Double)
+    giveUpAccuracy = toRational (read giveUpAccuracyS :: Double)
     maxThreads = read maxThreadsS :: Integer
     debug = debugS == "debug"
-processArgs _ _ = error "failed to match parameters"
+processArgs _ _ =
+  error
+    $ "Failed to match args.  Expected args: problem eps giveUpAccuracy maxThreads debug"
+    ++ "\n Available problems: "
+    ++ (List.concat $ List.map ("\n" ++) problemNames)
+  where
+    problemNames = Map.keys $ problems sampleMPBall 0.0
 
 -- |
 -- Example runs:
@@ -149,15 +157,15 @@ main :: IO ()
 main = do
   (arith : args) <- getArgs
   case arith of
-    "intervalArith" ->
+    "IA" ->
       mainWithArgs $ processArgs sampleMPBall args
-    "affineArith" ->
+    "AA" ->
       mainWithArgs $ processArgs sampleMPAffine args
     _ ->
       error $ "unknown arithmetic: " ++ arith
 
 mainWithArgs :: (ProblemR r) => (Problem r, Rational, Integer, Bool) -> IO ()
-mainWithArgs (Problem {scope, constraint} :: Problem r, eps, maxThreads, debug) =
+mainWithArgs (Problem {scope, constraint} :: Problem r, giveUpAccuracy, maxThreads, debug) =
   if debug
     then runStdoutLoggingT task
     else runNoLoggingT task
@@ -168,7 +176,7 @@ mainWithArgs (Problem {scope, constraint} :: Problem r, eps, maxThreads, debug) 
         boxBranchAndPrune
           $ BoxBPParams
             { maxThreads,
-              giveUpAccuracy = eps / 10,
+              giveUpAccuracy = giveUpAccuracy,
               scope,
               constraint
             }
