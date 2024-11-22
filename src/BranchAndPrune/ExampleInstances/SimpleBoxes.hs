@@ -1,17 +1,9 @@
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RebindableSyntax #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- |
 -- This module provides the ingredients needed to apply the branch and bound algorithm to
 -- solve real constraints with very simple pruning based only on straightforward interval evaluation.
---
 module BranchAndPrune.ExampleInstances.SimpleBoxes
   ( Var,
     Box (..),
@@ -26,20 +18,21 @@ module BranchAndPrune.ExampleInstances.SimpleBoxes
 where
 
 import AERN2.MP (Kleenean (..), MPBall)
-import qualified AERN2.MP as MP
+import AERN2.MP qualified as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
 import AERN2.MP.Dyadic (dyadic)
-import qualified BranchAndPrune.BranchAndPrune as BP
+import BranchAndPrune.BranchAndPrune qualified as BP
 import BranchAndPrune.ExampleInstances.RealConstraints
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.List (sortOn)
-import qualified Data.List as List
-import qualified Data.Map as Map
+import Data.List qualified as List
+import Data.Map qualified as Map
 import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
-import qualified Prelude as P
+import Prelude qualified as P
+import AERN2.MP.Ball (CentreRadius(CentreRadius))
 
 {- N-dimensional Boxes -}
 
@@ -74,16 +67,10 @@ mkBox varDomainsRational =
       splitOrder = map fst varDomainsRational
     }
   where
-    toBall (var, (lR, uR)) = (var, MP.mpBall (mR, rR))
+    toBall (var, (lR, uR)) = (var, MP.mpBall (CentreRadius mR rR))
       where
         mR = (lR + uR) / 2
         rR = (uR - lR) / 2
-
-boxGetVarDomain :: Box -> Var -> MP.MPBall
-boxGetVarDomain (Box {..}) var =
-  case Map.lookup var varDomains of
-    Nothing -> error $ printf "variable %s not present in box %s" var (show varDomains)
-    Just dom -> dom
 
 boxAreaD :: Box -> Double
 boxAreaD (Box {..}) = product (map (double . dyadic . MP.radius) (Map.elems varDomains))
@@ -143,17 +130,18 @@ splitMPBall b = (bL, bU)
     bL = fromMPBallEndpoints l m
     bU = fromMPBallEndpoints m u
 
-type ExprB = Expr Box MPBall
+type ExprB r = Expr Box r
 
-instance CanGetLiteral Box MPBall where
-  getLiteral box = MP.mpBallP (MP.getPrecision box)
+type FormB r = Form (ExprB r)
 
-instance CanGetVarDomain Box MPBall where
-  getVarDomain = boxGetVarDomain
+type HasKleenanComparison r =
+  ( HasOrder r r,
+    OrderCompareType r r ~ Kleenean,
+    HasEq r r,
+    EqCompareType r r ~ Kleenean
+  )
 
-type FormB = Form ExprB
-
-instance (Applicative m) => BP.CanPrune m Box FormB Boxes where
+instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m Box (FormB r) Boxes where
   pruneBasicSetM c b = pure (cP, pavingP)
     where
       cP = simplifyOnBox b c
@@ -163,12 +151,17 @@ instance (Applicative m) => BP.CanPrune m Box FormB Boxes where
         _ -> BP.pavingUndecided bSet
       bSet = BP.fromBasicSets [b]
 
-simplifyOnBox :: Box -> FormB -> FormB
+simplifyOnBox :: (HasKleenanComparison r) => Box -> FormB r -> FormB r
 simplifyOnBox box = simplify
   where
-    simplify :: FormB -> FormB
+    simplify :: (HasKleenanComparison r) => FormB r -> FormB r
     simplify (FormComp CompLeq e1 e2) =
       case e1.eval box <= e2.eval box of
+        CertainTrue -> FormTrue
+        CertainFalse -> FormFalse
+        TrueOrFalse -> FormComp CompLeq e1 e2
+    simplify (FormComp CompEq e1 e2) =
+      case e1.eval box == e2.eval box of
         CertainTrue -> FormTrue
         CertainFalse -> FormFalse
         TrueOrFalse -> FormComp CompLeq e1 e2
@@ -198,12 +191,20 @@ simplifyOnBox box = simplify
         (FormTrue, simplifiedF2) -> simplifiedF2
         (simplifiedF1, FormFalse) -> FormUnary ConnNeg simplifiedF1
         (simplifiedF1, simplifiedF2) -> FormBinary ConnImpl simplifiedF1 simplifiedF2
+    simplify (FormIfThenElse fc ft ff) =      
+      case (simplify fc, simplify ft, simplify ff) of
+        (FormTrue, simplifiedT, _) -> simplifiedT
+        (FormFalse, _, simplifiedF) -> simplifiedF
+        (_, FormTrue, FormTrue) -> FormTrue
+        (_, FormFalse, FormFalse) -> FormFalse
+        (simplifiedC, simplifiedT, simplifiedF) -> FormIfThenElse simplifiedC simplifiedT simplifiedF
+        
     simplify FormTrue = FormTrue
     simplify FormFalse = FormFalse
 
-newtype BoxStack = BoxStack [(Box, FormB)]
+newtype BoxStack r = BoxStack [(Box, FormB r)]
 
-instance BP.IsPriorityQueue BoxStack (Box, FormB) where
+instance BP.IsPriorityQueue (BoxStack r) (Box, FormB r) where
   singletonQueue e = BoxStack [e]
   queueToList (BoxStack list) = list
   queuePickNext (BoxStack []) = Nothing
@@ -218,9 +219,9 @@ instance BP.IsPriorityQueue BoxStack (Box, FormB) where
 
   queueMerge (BoxStack stackL) (BoxStack stackR) = BoxStack $ stackL ++ stackR
 
-data BoxBPParams = BoxBPParams
+data BoxBPParams r = BoxBPParams
   { scope :: Box,
-    constraint :: FormB,
+    constraint :: FormB r,
     maxThreads :: Integer,
     giveUpAccuracy :: Rational
   }
@@ -234,7 +235,7 @@ shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
       where
         diameter = 2 * MP.radius ball
 
-boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => BoxBPParams -> m (BP.Result Boxes BoxStack)
+boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) => BoxBPParams r -> m (BP.Result Boxes (BoxStack r))
 boxBranchAndPrune (BoxBPParams {..}) =
   BP.branchAndPruneM
     ( BP.Params
@@ -248,5 +249,5 @@ boxBranchAndPrune (BoxBPParams {..}) =
         }
     )
   where
-    dummyPriorityQueue :: BoxStack
+    dummyPriorityQueue :: BoxStack r
     dummyPriorityQueue = BoxStack [(undefined :: Box, FormFalse)]
