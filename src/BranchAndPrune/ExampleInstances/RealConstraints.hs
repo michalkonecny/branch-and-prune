@@ -54,19 +54,19 @@ instance P.Eq (Expr b r) where
 
 exprNeg :: (CanNegSameType r) => Expr b r -> Expr b r
 exprNeg e =
-  e {eval = negate . e.eval, description = printf "-(%b)" e.description}
+  e {eval = negate . e.eval, description = printf "-(%s)" e.description}
 
 exprSqrt :: (CanSqrtSameType r) => Expr b r -> Expr b r
 exprSqrt e =
-  e {eval = sqrt . e.eval, description = printf "sqrt(%b)" e.description}
+  e {eval = sqrt . e.eval, description = printf "sqrt(%s)" e.description}
 
 exprSin :: (CanSinCosSameType r) => Expr b r -> Expr b r
 exprSin e =
-  e {eval = sin . e.eval, description = printf "sin(%b)" e.description}
+  e {eval = sin . e.eval, description = printf "sin(%s)" e.description}
 
 exprCos :: (CanSinCosSameType r) => Expr b r -> Expr b r
 exprCos e =
-  e {eval = cos . e.eval, description = printf "cos(%b)" e.description}
+  e {eval = cos . e.eval, description = printf "cos(%s)" e.description}
 
 exprPlus :: (CanAddSameType r) => Expr b r -> Expr b r -> Expr b r
 exprPlus e1 e2 =
@@ -74,7 +74,7 @@ exprPlus e1 e2 =
     { eval = \b -> e1.eval b + e2.eval b,
       vars = e1.vars `Set.union` e2.vars,
       sampleR = e1.sampleR,
-      description = printf "(%b) + (%b)" e1.description e2.description
+      description = printf "(%s) + (%s)" e1.description e2.description
     }
 
 exprTimes :: (CanMulSameType r) => Expr b r -> Expr b r -> Expr b r
@@ -83,7 +83,7 @@ exprTimes e1 e2 =
     { eval = \b -> e1.eval b * e2.eval b,
       vars = e1.vars `Set.union` e2.vars,
       sampleR = e1.sampleR,
-      description = printf "(%b)*(%b)" e1.description e2.description
+      description = printf "(%s)*(%s)" e1.description e2.description
     }
 
 -- Instances to conveniently build expressions using the usual numerical operators
@@ -165,10 +165,10 @@ data Form expr
 
 instance (Show expr) => Show (Form expr) where
   show :: Form expr -> String
-  show (FormComp comp l r) = printf "%b %b %b" (show l) (show comp) (show r)
-  show (FormUnary op l) = printf "%b (%b)" (show op) (show l)
-  show (FormBinary op l r) = printf "(%b) %b (%b)" (show l) (show op) (show r)
-  show (FormIfThenElse c t f) = printf "if (%b) then (%b) else (%b)" (show c) (show t) (show f)
+  show (FormComp comp l r) = printf "%s %s %s" (show l) (show comp) (show r)
+  show (FormUnary op l) = printf "%s (%s)" (show op) (show l)
+  show (FormBinary op l r) = printf "(%s) %s (%s)" (show l) (show op) (show r)
+  show (FormIfThenElse c t f) = printf "if (%s) then (%s) else (%s)" (show c) (show t) (show f)
   show FormTrue = "True"
   show FormFalse = "False"
 
