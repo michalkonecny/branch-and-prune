@@ -28,6 +28,7 @@ dependencies:
 - time
 - unliftio-core
 - stm
+- hedis
 - mixed-types-num
 - aern2-mp
 - aern2-affarith

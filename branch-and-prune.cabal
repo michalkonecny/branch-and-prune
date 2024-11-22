@@ -32,6 +32,7 @@ library
       BranchAndPrune.ExampleInstances.RealConstraints
       BranchAndPrune.ExampleInstances.SimpleBoxes
       BranchAndPrune.ForkUtils
+      BranchAndPrune.LogUtils
       BranchAndPrune.Sets
   other-modules:
       Paths_branch_and_prune
@@ -51,6 +52,7 @@ library
     , aern2-mp
     , base >=4.7 && <5
     , containers
+    , hedis
     , mixed-types-num
     , monad-logger
     , stm
@@ -83,6 +85,7 @@ test-suite branch-and-prune-test
     , base >=4.7 && <5
     , branch-and-prune
     , containers
+    , hedis
     , hspec
     , mixed-types-num
     , monad-logger

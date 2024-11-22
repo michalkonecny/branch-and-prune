@@ -25,6 +25,7 @@ import qualified BranchAndPrune.BranchAndPrune as BP
 import Control.Monad.Logger (MonadLogger)
 import qualified Data.Set as Set
 import Control.Monad.IO.Unlift (MonadUnliftIO)
+import BranchAndPrune.LogUtils (logDebugStr)
 
 newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show)
 
@@ -123,7 +124,7 @@ intSetBranchAndPrune (IntSetBPParams {..}) =
           BP.shouldGiveUpOnBasicSet = const False :: BasicIntSet -> Bool,
           BP.dummyPriorityQueue,
           BP.maxThreads = 2,
-          BP.dummyMaction = pure ()
+          BP.logM = logDebugStr
         }
     )
   where

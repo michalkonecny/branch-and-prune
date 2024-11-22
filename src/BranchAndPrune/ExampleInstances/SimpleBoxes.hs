@@ -33,6 +33,7 @@ import MixedTypesNumPrelude
 import Text.Printf (printf)
 import Prelude qualified as P
 import AERN2.MP.Ball (CentreRadius(CentreRadius))
+import BranchAndPrune.LogUtils (logDebugStr)
 
 {- N-dimensional Boxes -}
 
@@ -245,7 +246,7 @@ boxBranchAndPrune (BoxBPParams {..}) =
           BP.shouldGiveUpOnBasicSet = shouldGiveUpOnBox giveUpAccuracy :: Box -> Bool,
           BP.dummyPriorityQueue,
           BP.maxThreads,
-          BP.dummyMaction = pure ()
+          BP.logM = logDebugStr
         }
     )
   where

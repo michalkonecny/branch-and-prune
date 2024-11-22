@@ -10,26 +10,26 @@ module BranchAndPrune.BranchAndPrune
   )
 where
 
-import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Monad.Logger (MonadLogger, logDebugN)
-import qualified Data.Text as T
-import Data.Time.Clock (getCurrentTime)
-import Data.Time.Format.ISO8601 (iso8601Show)
+-- import Control.Monad.Logger (MonadLogger, logDebugN)
+-- import qualified Data.Text as T
+-- import Data.Time.Clock (getCurrentTime)
+-- import Data.Time.Format.ISO8601 (iso8601Show)
 import BranchAndPrune.ForkUtils (HasIsAborted (..), forkAndMerge, decideWhetherToFork)
 import GHC.Conc (numCapabilities, newTVarIO)
 import Text.Printf (printf)
 import BranchAndPrune.Sets
 
--- The following wrapper supports the use of "printf" to format log messages.
--- It prepends the current time to the message.
--- It also reduced the need for OverloadedStrings.
--- OverloadedStrings is not sufficient to get `printf` to work with the logger functions.
-logDebugStr :: (MonadIO m, MonadLogger m) => String -> m ()
-logDebugStr str = do
-  currTime <- iso8601Show <$> liftIO getCurrentTime
-  let msgToLog = currTime <> ": " <> str
-  logDebugN (T.pack msgToLog)
+-- -- The following wrapper supports the use of "printf" to format log messages.
+-- -- It prepends the current time to the message.
+-- -- It also reduced the need for OverloadedStrings.
+-- -- OverloadedStrings is not sufficient to get `printf` to work with the logger functions.
+-- logDebugStr :: (MonadIO m, MonadLogger m) => String -> m ()
+-- logDebugStr str = do
+--   currTime <- iso8601Show <$> liftIO getCurrentTime
+--   let msgToLog = currTime <> ": " <> str
+--   logDebugN (T.pack msgToLog)
 
 class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   singletonQueue :: elem -> priorityQueue
@@ -46,7 +46,7 @@ data Params m basicSet set priorityQueue constraint = Params
     shouldGiveUpOnBasicSet :: basicSet -> Bool,
     maxThreads :: Integer,
     dummyPriorityQueue :: priorityQueue,
-    dummyMaction :: m ()
+    logM :: String -> m ()
   }
 
 data Result set priorityQueue = Result
@@ -83,7 +83,7 @@ branchAndPruneM ::
     CanSplitSet basicSet set,
     CanPrune m basicSet constraint set,
     IsPriorityQueue priorityQueue (basicSet, constraint),
-    MonadLogger m,
+    -- MonadLogger m,
     MonadUnliftIO m,
     Show basicSet,
     Show constraint
@@ -95,18 +95,18 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
     liftIO $ do
       printf "capabilities: %d\n" numCapabilities
     numberOfThreadsTV <- liftIO $ newTVarIO 1
-    logDebugStr "B&P process starting"
+    logM "B&P process starting"
     result@(Result {queue}) <- bpProcess numberOfThreadsTV
-    logDebugStr "B&P process finishing"
+    logM "B&P process finishing"
     -- print result summary:
     case queuePickNext queue of
       Nothing ->
         do
           -- queue empty, process finished
-          logDebugStr "Successfully paved the whole set."
+          logM "Successfully paved the whole set."
       Just ((b, _), _) ->
         -- queue not empty, process unfinished
-        logDebugStr $ printf "Aborted around: %s" (show b)
+        logM $ printf "Aborted around: %s" (show b)
     pure result
   where
     bpProcess numberOfThreadsTV = do
@@ -170,5 +170,4 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                                   step threadNumber pavingWithPruningDecided queueWithPruningUndecided
           where
             logDebugThread (s :: String) = do
-              logDebugStr $ "Thread " ++ show threadNumber ++ ":" ++ s
-              pure ()
+              logM $ "Thread " ++ show threadNumber ++ ":" ++ s
