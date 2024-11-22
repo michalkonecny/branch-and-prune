@@ -23,11 +23,12 @@ import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
 import AERN2.MP.Dyadic (dyadic)
 import BranchAndPrune.BranchAndPrune qualified as BP
 import BranchAndPrune.ExampleInstances.RealConstraints
-import Control.Monad.IO.Unlift (MonadUnliftIO)
+import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.List (sortOn)
 import Data.List qualified as List
 import Data.Map qualified as Map
+import Database.Redis qualified as Redis
 import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
@@ -237,7 +238,8 @@ shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
         diameter = 2 * MP.radius ball
 
 boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) => BoxBPParams r -> m (BP.Result Boxes (BoxStack r))
-boxBranchAndPrune (BoxBPParams {..}) =
+boxBranchAndPrune (BoxBPParams {..}) = do
+  conn <- liftIO $ Redis.checkedConnect Redis.defaultConnectInfo
   BP.branchAndPruneM
     ( BP.Params
         { BP.scope,
@@ -246,7 +248,8 @@ boxBranchAndPrune (BoxBPParams {..}) =
           BP.shouldGiveUpOnBasicSet = shouldGiveUpOnBox giveUpAccuracy :: Box -> Bool,
           BP.dummyPriorityQueue,
           BP.maxThreads,
-          BP.logM = logDebugStr
+          BP.logString = logDebugStr,
+          BP.logStep = \ _ -> pure () -- do nothing, TODO: write to Redis
         }
     )
   where

@@ -124,7 +124,8 @@ intSetBranchAndPrune (IntSetBPParams {..}) =
           BP.shouldGiveUpOnBasicSet = const False :: BasicIntSet -> Bool,
           BP.dummyPriorityQueue,
           BP.maxThreads = 2,
-          BP.logM = logDebugStr
+          BP.logString = logDebugStr,
+          BP.logStep = \ _ -> pure () -- do nothing
         }
     )
   where

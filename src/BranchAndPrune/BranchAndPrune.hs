@@ -1,8 +1,9 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-partial-fields #-}
+
 module BranchAndPrune.BranchAndPrune
-  (
-    module BranchAndPrune.Sets,
+  ( module BranchAndPrune.Sets,
     IsPriorityQueue (..),
     Params (..),
     Result (..),
@@ -10,12 +11,12 @@ module BranchAndPrune.BranchAndPrune
   )
 where
 
+import BranchAndPrune.ForkUtils (HasIsAborted (..), decideWhetherToFork, forkAndMerge)
+import BranchAndPrune.Sets
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
-import BranchAndPrune.ForkUtils (HasIsAborted (..), forkAndMerge, decideWhetherToFork)
-import GHC.Conc (numCapabilities, newTVarIO)
+import GHC.Conc (newTVarIO)
 import Text.Printf (printf)
-import BranchAndPrune.Sets
 
 class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   singletonQueue :: elem -> priorityQueue
@@ -32,8 +33,31 @@ data Params m basicSet set priorityQueue constraint = Params
     shouldGiveUpOnBasicSet :: basicSet -> Bool,
     maxThreads :: Integer,
     dummyPriorityQueue :: priorityQueue,
-    logM :: String -> m ()
+    logString :: String -> m (),
+    logStep :: Step basicSet set constraint -> m ()
   }
+
+data Step basicSet set constraint
+  = InitStep
+      { scope :: basicSet,
+        constraint :: constraint
+      }
+  | PruningStep
+      { scope :: basicSet,
+        constraint :: constraint,
+        prunedScope :: Paving set,
+        prunedConstraint :: constraint
+      }
+  | SplitStep
+      { scope :: basicSet,
+        pieces :: [basicSet]
+      }
+  | GiveUpOnSetStep
+      { scope :: basicSet,
+        constraint :: constraint
+      }
+  | AbortStep
+  | DoneStep
 
 data Result set priorityQueue = Result
   { paving :: Paving set,
@@ -78,24 +102,24 @@ branchAndPruneM ::
   m (Result set priorityQueue)
 branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) =
   do
-    liftIO $ do
-      printf "capabilities: %d\n" numCapabilities
     numberOfThreadsTV <- liftIO $ newTVarIO 1
-    logM "B&P process starting"
+    logString "B&P process starting"
     result@(Result {queue}) <- bpProcess numberOfThreadsTV
-    logM "B&P process finishing"
+    logString "B&P process finishing"
     -- print result summary:
     case queuePickNext queue of
       Nothing ->
         do
           -- queue empty, process finished
-          logM "Successfully paved the whole set."
+          logString "Successfully paved the whole set."
       Just ((b, _), _) ->
         -- queue not empty, process unfinished
-        logM $ printf "Aborted around: %s" (show b)
+        logString $ printf "Aborted around: %s" (show b)
     pure result
   where
     bpProcess numberOfThreadsTV = do
+      -- init
+      logStep $ InitStep {scope, constraint}
       step 0 emptyPaving initQueue
       where
         initQueue = singletonQueue (scope, constraint)
@@ -103,27 +127,35 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
         step threadNumber pavingSoFar queue
           | shouldAbort pavingSoFar =
               do
+                -- abort
+                logStep $ AbortStep
                 logDebugThread "Stopping the B&P process."
                 pure $ Result {paving = pavingSoFar, queue, aborted = True}
           | otherwise =
               case queuePickNext queue of
                 Nothing ->
                   do
+                    -- done - fully paved
                     logDebugThread "The queue is empty, finishing."
+                    logStep DoneStep
                     pure $ Result {paving = pavingSoFar, queue, aborted = False}
                 Just ((b, c), queuePicked) ->
                   do
                     logDebugThread $ printf "Picked set %s, constraint %s" (show b) (show c)
                     if shouldGiveUpOnBasicSet b
                       then do
+                        -- give up
+                        logStep $ GiveUpOnSetStep {scope = b, constraint = c}
                         logDebugThread $ printf "Leaving undecided on: %s" (show b)
                         let undecidedWithB = pavingSoFar.undecided `setUnion` fromBasicSets [b]
                         let pavingWithB = pavingSoFar {undecided = undecidedWithB}
                         step threadNumber pavingWithB queuePicked
                       else do
-                        -- not giving up on b
+                        -- pruning b
                         logDebugThread $ printf "Pruning on: %s" (show b)
                         (cPruned, prunePaving) <- pruneBasicSetM c b
+                        logStep $
+                          PruningStep {scope = b, constraint = c, prunedScope = prunePaving, prunedConstraint = cPruned}
                         --
                         let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
                         if setIsEmpty prunePaving.undecided
@@ -132,8 +164,9 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                             logDebugThread $ printf "Fully solved on: %s" (show b)
                             step threadNumber pavingWithPruningDecided queuePicked
                           else do
-                            -- not done on b
+                            -- not done on b, splitting the undecided subset of b
                             let pruneUndecidedSplit = splitSet prunePaving.undecided
+                            logStep $ SplitStep {scope = b, pieces = pruneUndecidedSplit}
                             logDebugThread $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
                             let queueWithPruningUndecided = queuePicked `queueAddMany` map (,cPruned) pruneUndecidedSplit
                             forkInfo <- decideWhetherToFork numberOfThreadsTV maxThreads (queueSplit queueWithPruningUndecided)
@@ -156,4 +189,4 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                                   step threadNumber pavingWithPruningDecided queueWithPruningUndecided
           where
             logDebugThread (s :: String) = do
-              logM $ "Thread " ++ show threadNumber ++ ":" ++ s
+              logString $ "Thread " ++ show threadNumber ++ ":" ++ s
