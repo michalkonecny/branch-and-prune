@@ -11,6 +11,7 @@ module BranchAndPrune.ExampleInstances.RealConstraints
     BinaryConn (..),
     BinaryComp (..),
     formImpl,
+    formIfThenElse,
   )
 where
 
@@ -157,6 +158,7 @@ data Form expr
   = FormComp BinaryComp expr expr
   | FormUnary UnaryConn (Form expr)
   | FormBinary BinaryConn (Form expr) (Form expr)
+  | FormIfThenElse (Form expr) (Form expr) (Form expr)
   | FormTrue
   | FormFalse
   deriving (P.Eq)
@@ -166,6 +168,7 @@ instance (Show expr) => Show (Form expr) where
   show (FormComp comp l r) = printf "%b %b %b" (show l) (show comp) (show r)
   show (FormUnary op l) = printf "%b (%b)" (show op) (show l)
   show (FormBinary op l r) = printf "(%b) %b (%b)" (show l) (show op) (show r)
+  show (FormIfThenElse c t f) = printf "if (%b) then (%b) else (%b)" (show c) (show t) (show f)
   show FormTrue = "True"
   show FormFalse = "False"
 
@@ -187,6 +190,9 @@ formOr = FormBinary ConnOr
 formImpl :: Form expr -> Form expr -> Form expr
 formImpl = FormBinary ConnImpl
 
+formIfThenElse :: Form expr -> Form expr -> Form expr -> Form expr
+formIfThenElse = FormIfThenElse
+
 instance CanNeg (Form expr) where
   negate = formNeg
 
@@ -194,6 +200,10 @@ instance CanAndOrAsymmetric (Form expr) (Form expr) where
   type AndOrType (Form expr) (Form expr) = (Form expr)
   and2 = formAnd
   or2 = formOr
+
+instance HasIfThenElse (Form expr) (Form expr) where
+  type IfThenElseType (Form expr) (Form expr) =  (Form expr)
+  ifThenElse = formIfThenElse
 
 instance ConvertibleExactly Bool (Form expr) where
   safeConvertExactly True = Right FormTrue

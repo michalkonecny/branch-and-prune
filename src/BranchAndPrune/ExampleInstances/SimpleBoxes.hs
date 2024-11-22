@@ -191,6 +191,14 @@ simplifyOnBox box = simplify
         (FormTrue, simplifiedF2) -> simplifiedF2
         (simplifiedF1, FormFalse) -> FormUnary ConnNeg simplifiedF1
         (simplifiedF1, simplifiedF2) -> FormBinary ConnImpl simplifiedF1 simplifiedF2
+    simplify (FormIfThenElse fc ft ff) =      
+      case (simplify fc, simplify ft, simplify ff) of
+        (FormTrue, simplifiedT, _) -> simplifiedT
+        (FormFalse, _, simplifiedF) -> simplifiedF
+        (_, FormTrue, FormTrue) -> FormTrue
+        (_, FormFalse, FormFalse) -> FormFalse
+        (simplifiedC, simplifiedT, simplifiedF) -> FormIfThenElse simplifiedC simplifiedT simplifiedF
+        
     simplify FormTrue = FormTrue
     simplify FormFalse = FormFalse
 

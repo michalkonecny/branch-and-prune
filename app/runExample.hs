@@ -24,8 +24,8 @@ import BranchAndPrune.ExampleInstances.SimpleBoxes
   )
 import Control.Monad.IO.Unlift (MonadIO (liftIO), MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, NoLoggingT (runNoLoggingT), runStdoutLoggingT)
-import qualified Data.List as List
-import qualified Data.Map as Map
+import Data.List qualified as List
+import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 -- import GHC.Records
 import MixedTypesNumPrelude
@@ -103,14 +103,12 @@ problems (sampleR :: r) eps =
                       )
                         + x
                     )
-               in ((x <= 1 / 67108864 && -x <= 1 / 67108864) `formImpl` (r1 == x))
-                    && ( (not ((x <= 1 / 67108864 && -x <= 1 / 67108864)))
-                           `formImpl` ( (r1 <= t + (4498891 / 100000000000000))
-                                          && ((t - (4498891 / 100000000000000)) <= r1)
-                                      )
-                       )
-                    && ((r1 == x) || (r1 <= t + (4498891 / 100000000000000))
-                                          && ((t - (4498891 / 100000000000000)) <= r1))
+               in ( if x <= 1 / 67108864 && -x <= 1 / 67108864
+                      then r1 == x
+                      else
+                        (r1 <= t + (4498891 / 100000000000000))
+                          && ((t - (4498891 / 100000000000000)) <= r1)
+                  )
                     && (not ((r1 + (-1.0 * (sin x))) <= (58 * (1 / 1000000000)) + eps))
           }
       )
@@ -141,7 +139,8 @@ processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, debugS] =
     debug = debugS == "debug"
 processArgs _ _ =
   error
-    $ "Failed to match args.  Expected args: problem eps giveUpAccuracy maxThreads debug"
+    $ "Failed to match args.  Expected args: arithmetic problem eps giveUpAccuracy maxThreads debug"
+    ++ "\n Available arithmetics: IA, AA"
     ++ "\n Available problems: "
     ++ (List.concat $ List.map ("\n" ++) problemNames)
   where
