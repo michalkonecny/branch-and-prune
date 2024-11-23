@@ -25,8 +25,10 @@ import AERN2.MP.Ball (CentreRadius (CentreRadius))
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
 import AERN2.MP.Dyadic (dyadic)
 import BranchAndPrune.BranchAndPrune qualified as BP
+import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
+import BranchAndPrune.ExampleInstances.SimpleBoxes.JSON ()
 import BranchAndPrune.ExampleInstances.RealConstraints
-import BranchAndPrune.LogUtils (logDebugStr)
+import BranchAndPrune.Logging
 import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.Aeson qualified as Aeson
@@ -35,84 +37,10 @@ import Data.List qualified as List
 import Data.Map qualified as Map
 import Data.String (IsString (..)) -- for OverloadedStrings
 -- import Database.Redis qualified as Redis
-import Data.Text.Lazy qualified as T
-import Data.Text.Lazy.Encoding qualified as TE
-import GHC.Generics
 import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import Prelude qualified as P
-
-{- N-dimensional Boxes -}
-
-data Box = Box {varDomains :: Map.Map Var MP.MPBall, splitOrder :: [Var]}
-
-deriving instance (Generic Box)
-instance Aeson.ToJSON Box where
-  toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
-
-instance Aeson.ToJSON MP.MPBall where
-  toJSON b = Aeson.object ["l" .= lD, "u" .= uD]
-    where
-      (l, u) = MP.endpoints b
-      lD = double l
-      uD = double u
-      (.=) = (Aeson..=)
-
-instance Show Box where
-  show (Box {..}) =
-    printf "[%s]" $ List.intercalate ", " $ map showVarDom $ Map.toList varDomains
-    where
-      showVarDom :: (Var, MPBall) -> String
-      showVarDom (var, ball) = printf "%s ∈ [%s..%s]" var (show (double l)) (show (double u))
-        where
-          (l, u) = MP.endpoints ball
-
-instance P.Eq Box where
-  b1 == b2 = varDomainsR b1 == varDomainsR b2
-
-varDomainsR :: Box -> [(Var, (Rational, Rational))]
-varDomainsR b = sortOn fst $ map fromBall (Map.toList b.varDomains)
-  where
-    fromBall (var, ball) = (var, (rational lR, rational uR))
-      where
-        (lR, uR) = MP.endpoints ball
-
-instance MP.HasPrecision Box where
-  getPrecision (Box {}) = MP.defaultPrecision -- TODO : use precision from varDomains if possible
-
-mkBox :: [(Var, (Rational, Rational))] -> Box
-mkBox varDomainsRational =
-  Box
-    { varDomains = Map.fromList (map toBall varDomainsRational),
-      splitOrder = map fst varDomainsRational
-    }
-  where
-    toBall (var, (lR, uR)) = (var, MP.mpBall (CentreRadius mR rR))
-      where
-        mR = (lR + uR) / 2
-        rR = (uR - lR) / 2
-
-boxAreaD :: Box -> Double
-boxAreaD (Box {..}) = product (map (double . dyadic . MP.radius) (Map.elems varDomains))
-
-data Boxes
-  = Boxes [Box]
-  | BoxesUnion [Boxes]
-  deriving (P.Eq, Show)
-
-deriving instance (Generic Boxes)
-instance Aeson.ToJSON Boxes where
-  toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
-
-
-boxesCount :: Boxes -> Integer
-boxesCount (Boxes boxes) = length boxes
-boxesCount (BoxesUnion union) = sum (map boxesCount union)
-
-boxesAreaD :: Boxes -> Double
-boxesAreaD (Boxes boxes) = sum (map boxAreaD boxes)
-boxesAreaD (BoxesUnion union) = sum (map boxesAreaD union)
 
 instance BP.IsSet Boxes where
   emptySet = Boxes []
@@ -252,14 +180,6 @@ data BoxBPParams r = BoxBPParams
     logConfig :: LogConfig
   }
 
-data LogConfig where
-  DoNotLog :: LogConfig
-  LogToConsole :: LogConfig
-  LogStepsToConsole :: LogConfig
-  LogStepsToFile :: FilePath -> LogConfig
-  -- LogStepsToRedisStream :: String -> LogConfig
-  deriving (P.Eq)
-
 shouldGiveUpOnBox :: Rational -> Box -> Bool
 shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
   all smallerThanPrec (Map.elems varDomains)
@@ -272,33 +192,16 @@ shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
 boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) => BoxBPParams r -> m (BP.Result Boxes (BoxStack r))
 boxBranchAndPrune (BoxBPParams {..}) = do
   -- conn <- liftIO $ Redis.checkedConnect Redis.defaultConnectInfo
-  BP.branchAndPruneM
+  BP.branchAndPruneM logConfig
     ( BP.Params
         { BP.scope,
           BP.constraint,
           BP.shouldAbort = const Nothing,
           BP.shouldGiveUpOnBasicSet = shouldGiveUpOnBox giveUpAccuracy :: Box -> Bool,
           BP.dummyPriorityQueue,
-          BP.maxThreads,
-          BP.logString = logString,
-          BP.logStep = logStep
+          BP.maxThreads
         }
     )
   where
     dummyPriorityQueue :: BoxStack r
     dummyPriorityQueue = BoxStack [(undefined :: Box, FormFalse)]
-
-    logString = case logConfig of
-      LogToConsole -> logDebugStr
-      _ -> const (pure ())
-
-    logStep = case logConfig of
-      LogStepsToConsole -> liftIO . putStrLn . stepToJSON
-      LogStepsToFile filePath -> const (pure ())
-      _ -> const (pure ())
-
-    stepToJSON step =
-      (replicate 100 '-') ++ "\n" ++
-      case TE.decodeUtf8' $ Aeson.encode step of
-        Left err -> "Failed to decode UTF8: " ++ (show err)
-        Right stepT -> T.unpack stepT

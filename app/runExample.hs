@@ -31,6 +31,7 @@ import Data.Maybe (fromJust)
 -- import GHC.Records
 import MixedTypesNumPrelude
 import System.Environment (getArgs)
+import BranchAndPrune.Logging (defaultLogConfig)
 
 -- import qualified Prelude as P
 
@@ -138,9 +139,9 @@ processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, logConfigS] =
     giveUpAccuracy = toRational (read giveUpAccuracyS :: Double)
     maxThreads = read maxThreadsS :: Integer
     logConfig = case logConfigS of
-      "debug" -> LogToConsole
-      "steps" -> LogStepsToConsole
-      _ -> DoNotLog
+      "debug" -> defaultLogConfig { shouldLogDebugMessages = True }
+      "steps" -> defaultLogConfig { stepsFile = Just "steps.json" }
+      _ -> defaultLogConfig
 processArgs _ _ =
   error
     $ "Failed to match args.  Expected args: arithmetic problem eps giveUpAccuracy maxThreads logConfig"

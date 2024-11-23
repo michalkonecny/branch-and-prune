@@ -16,18 +16,22 @@ module BranchAndPrune.ExampleInstances.IntSets
     BasicIntSet (..),
     IntConstraint (..),
     IntSetStack (..),
-    IntSetBPParams(..),
+    IntSetBPParams (..),
     intSetBranchAndPrune,
   )
 where
 
-import qualified BranchAndPrune.BranchAndPrune as BP
-import Control.Monad.Logger (MonadLogger)
-import qualified Data.Set as Set
+import BranchAndPrune.BranchAndPrune qualified as BP
+import BranchAndPrune.Logging
 import Control.Monad.IO.Unlift (MonadUnliftIO)
-import BranchAndPrune.LogUtils (logDebugStr)
+import Control.Monad.Logger (MonadLogger)
+import Data.Aeson qualified as A
+import Data.Set qualified as Set
+import GHC.Generics
 
-newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show)
+newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show, Generic)
+
+instance A.ToJSON IntSet
 
 instance BP.IsSet IntSet where
   emptySet = IntSet Set.empty
@@ -35,7 +39,9 @@ instance BP.IsSet IntSet where
   setUnion (IntSet set1) (IntSet set2) = IntSet (Set.union set1 set2)
   setShowStats (IntSet set) = show (Set.size set)
 
-data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int} deriving (Eq, Show)
+data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int} deriving (Eq, Show, Generic)
+
+instance A.ToJSON BasicIntSet
 
 instance BP.SetFromBasic BasicIntSet IntSet where
   fromBasicSets basicSets =
@@ -117,15 +123,14 @@ data IntSetBPParams = IntSetBPParams
 intSetBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => IntSetBPParams -> m (BP.Result IntSet IntSetStack)
 intSetBranchAndPrune (IntSetBPParams {..}) =
   BP.branchAndPruneM
+    (defaultLogConfig {shouldLogDebugMessages = True})
     ( BP.Params
         { BP.scope,
           BP.constraint,
           BP.shouldAbort = const Nothing,
           BP.shouldGiveUpOnBasicSet = const False :: BasicIntSet -> Bool,
           BP.dummyPriorityQueue,
-          BP.maxThreads = 2,
-          BP.logString = logDebugStr,
-          BP.logStep = \ _ -> pure () -- do nothing
+          BP.maxThreads = 2
         }
     )
   where

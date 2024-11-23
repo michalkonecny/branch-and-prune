@@ -31,8 +31,10 @@ library
       BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall
       BranchAndPrune.ExampleInstances.RealConstraints
       BranchAndPrune.ExampleInstances.SimpleBoxes
+      BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
+      BranchAndPrune.ExampleInstances.SimpleBoxes.JSON
       BranchAndPrune.ForkUtils
-      BranchAndPrune.LogUtils
+      BranchAndPrune.Logging
       BranchAndPrune.Sets
       BranchAndPrune.Steps
   other-modules:

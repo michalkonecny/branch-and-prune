@@ -15,8 +15,11 @@ import BranchAndPrune.Sets
 import BranchAndPrune.Steps
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
+import Data.Aeson qualified as A
 import GHC.Conc (newTVarIO)
 import Text.Printf (printf)
+import BranchAndPrune.Logging (LogConfig(..), LogFunctions (..), getLogFunctions)
+import Control.Monad.Logger (MonadLogger)
 
 class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   singletonQueue :: elem -> priorityQueue
@@ -32,9 +35,7 @@ data Params m basicSet set priorityQueue constraint = Params
     shouldAbort :: Paving set -> Maybe String,
     shouldGiveUpOnBasicSet :: basicSet -> Bool,
     maxThreads :: Integer,
-    dummyPriorityQueue :: priorityQueue,
-    logString :: String -> m (),
-    logStep :: Step basicSet set -> m ()
+    dummyPriorityQueue :: priorityQueue
   }
 
 data Result set priorityQueue = Result
@@ -71,34 +72,46 @@ branchAndPruneM ::
     CanSplitSet basicSet set,
     CanPrune m basicSet constraint set,
     IsPriorityQueue priorityQueue (basicSet, constraint),
-    -- MonadLogger m,
+    MonadLogger m,
     MonadUnliftIO m,
     Show basicSet,
-    Show constraint
+    Show constraint,
+    A.ToJSON basicSet,
+    A.ToJSON set
   ) =>
+  LogConfig ->
   Params m basicSet set priorityQueue constraint ->
   m (Result set priorityQueue)
-branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) =
+branchAndPruneM logConfig (Params {..} :: Params m basicSet set priorityQueue constraint) =
   do
     numberOfThreadsTV <- liftIO $ newTVarIO 1
-    logStep $ InitStep {scope, constraint = show constraint}
-    logString "B&P process starting"
-    result@(Result {queue}) <- bpProcess numberOfThreadsTV
-    logString "B&P process finishing"
+    logResources <- initLogging
+    let logDebugStrR = logDebugStr logResources
+    let reportStepR = reportStep logResources
+
+    reportStepR $ InitStep {scope, constraint = show constraint}
+    logDebugStrR "B&P process starting"
+    result@(Result {queue}) <- bpProcess logResources numberOfThreadsTV
+    logDebugStrR "B&P process finishing"
+
     -- print result summary:
     case queuePickNext queue of
       Nothing ->
         -- queue empty, process finished
-        logString "Successfully paved the whole set."
+        logDebugStrR "Successfully paved the whole set."
       Just ((b, _), _) ->
         -- queue not empty, process unfinished
-        logString $ printf "Aborted around: %s" (show b)
-    logStep $ DoneStep
+        logDebugStrR $ printf "Aborted around: %s" (show b)
+
+    reportStepR $ DoneStep
+    finaliseLogging logResources
     pure result
   where
-    bpProcess numberOfThreadsTV = do
+    LogFunctions {..} = getLogFunctions logConfig
+    bpProcess logResources numberOfThreadsTV = do
       step 0 emptyPaving initQueue
       where
+        reportStepR = reportStep logResources
         initQueue = singletonQueue (scope, constraint)
         step :: Int -> Paving set -> priorityQueue -> m (Result set priorityQueue)
         step threadNumber pavingSoFar queue =
@@ -106,7 +119,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
             Just abortDetail ->
               do
                 -- abort
-                logStep $ AbortStep {detail = abortDetail}
+                reportStepR $ AbortStep {detail = abortDetail}
                 logDebugThread "Stopping the B&P process."
                 pure $ Result {paving = pavingSoFar, queue, aborted = True}
             _ ->
@@ -122,7 +135,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                     if shouldGiveUpOnBasicSet b
                       then do
                         -- give up
-                        logStep $ GiveUpOnSetStep {scope = b, constraint = show c}
+                        reportStepR $ GiveUpOnSetStep {scope = b, constraint = show c}
                         logDebugThread $ printf "Leaving undecided on: %s" (show b)
                         let undecidedWithB = pavingSoFar.undecided `setUnion` fromBasicSets [b]
                         let pavingWithB = pavingSoFar {undecided = undecidedWithB}
@@ -131,7 +144,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                         -- pruning b
                         logDebugThread $ printf "Pruning on: %s" (show b)
                         (cPruned, prunePaving) <- pruneBasicSetM c b
-                        logStep $
+                        reportStepR $
                           PruneStep {scope = b, constraint = show c, prunedScope = prunePaving, prunedConstraint = show cPruned}
                         --
                         let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
@@ -143,7 +156,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                           else do
                             -- not done on b, splitting the undecided subset of b
                             let pruneUndecidedSplit = splitSet prunePaving.undecided
-                            logStep $ SplitStep {scope = b, pieces = pruneUndecidedSplit}
+                            reportStepR $ SplitStep {scope = b, pieces = pruneUndecidedSplit}
                             logDebugThread $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
                             let queueWithPruningUndecided = queuePicked `queueAddMany` map (,cPruned) pruneUndecidedSplit
                             forkInfo <- decideWhetherToFork numberOfThreadsTV maxThreads (queueSplit queueWithPruningUndecided)
@@ -166,4 +179,4 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                                   step threadNumber pavingWithPruningDecided queueWithPruningUndecided
           where
             logDebugThread (s :: String) = do
-              logString $ "Thread " ++ show threadNumber ++ ":" ++ s
+              logDebugStr logResources $ "Thread " ++ show threadNumber ++ ":" ++ s
