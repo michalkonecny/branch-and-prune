@@ -48,11 +48,7 @@ import Prelude qualified as P
 data Box = Box {varDomains :: Map.Map Var MP.MPBall, splitOrder :: [Var]}
 
 deriving instance (Generic Box)
-
 instance Aeson.ToJSON Box where
-  toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
-
-instance Aeson.ToJSON Boxes where
   toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
 
 instance Aeson.ToJSON MP.MPBall where
@@ -106,6 +102,9 @@ data Boxes
   deriving (P.Eq, Show)
 
 deriving instance (Generic Boxes)
+instance Aeson.ToJSON Boxes where
+  toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
+
 
 boxesCount :: Boxes -> Integer
 boxesCount (Boxes boxes) = length boxes
@@ -257,7 +256,7 @@ data LogConfig where
   DoNotLog :: LogConfig
   LogToConsole :: LogConfig
   LogStepsToConsole :: LogConfig
-  -- LogStepsToFile :: FilePath -> LogConfig
+  LogStepsToFile :: FilePath -> LogConfig
   -- LogStepsToRedisStream :: String -> LogConfig
   deriving (P.Eq)
 
@@ -289,13 +288,14 @@ boxBranchAndPrune (BoxBPParams {..}) = do
     dummyPriorityQueue :: BoxStack r
     dummyPriorityQueue = BoxStack [(undefined :: Box, FormFalse)]
 
-    logString
-      | logConfig P.== LogToConsole = logDebugStr
-      | otherwise = const (pure ())
+    logString = case logConfig of
+      LogToConsole -> logDebugStr
+      _ -> const (pure ())
 
-    logStep
-      | logConfig P.== LogStepsToConsole = liftIO . putStrLn . stepToJSON
-      | otherwise = const (pure ())
+    logStep = case logConfig of
+      LogStepsToConsole -> liftIO . putStrLn . stepToJSON
+      LogStepsToFile filePath -> const (pure ())
+      _ -> const (pure ())
 
     stepToJSON step =
       (replicate 100 '-') ++ "\n" ++

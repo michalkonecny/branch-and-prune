@@ -81,23 +81,22 @@ branchAndPruneM ::
 branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) =
   do
     numberOfThreadsTV <- liftIO $ newTVarIO 1
+    logStep $ InitStep {scope, constraint = show constraint}
     logString "B&P process starting"
     result@(Result {queue}) <- bpProcess numberOfThreadsTV
     logString "B&P process finishing"
     -- print result summary:
     case queuePickNext queue of
       Nothing ->
-        do
-          -- queue empty, process finished
-          logString "Successfully paved the whole set."
+        -- queue empty, process finished
+        logString "Successfully paved the whole set."
       Just ((b, _), _) ->
         -- queue not empty, process unfinished
         logString $ printf "Aborted around: %s" (show b)
+    logStep $ DoneStep
     pure result
   where
     bpProcess numberOfThreadsTV = do
-      -- init
-      logStep $ InitStep {scope, constraint = show constraint}
       step 0 emptyPaving initQueue
       where
         initQueue = singletonQueue (scope, constraint)
@@ -115,8 +114,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                 Nothing ->
                   do
                     -- done - fully paved
-                    logDebugThread "The queue is empty, finishing."
-                    logStep DoneStep
+                    logDebugThread "The queue is empty, finishing this thread."
                     pure $ Result {paving = pavingSoFar, queue, aborted = False}
                 Just ((b, c), queuePicked) ->
                   do
