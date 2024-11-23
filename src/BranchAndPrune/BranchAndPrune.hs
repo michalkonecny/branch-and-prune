@@ -1,6 +1,5 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wno-partial-fields #-}
 
 module BranchAndPrune.BranchAndPrune
   ( module BranchAndPrune.Sets,
@@ -13,6 +12,7 @@ where
 
 import BranchAndPrune.ForkUtils (HasIsAborted (..), decideWhetherToFork, forkAndMerge)
 import BranchAndPrune.Sets
+import BranchAndPrune.Steps
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import GHC.Conc (newTVarIO)
@@ -29,35 +29,13 @@ class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
 data Params m basicSet set priorityQueue constraint = Params
   { scope :: basicSet,
     constraint :: constraint,
-    shouldAbort :: Paving set -> Bool,
+    shouldAbort :: Paving set -> Maybe String,
     shouldGiveUpOnBasicSet :: basicSet -> Bool,
     maxThreads :: Integer,
     dummyPriorityQueue :: priorityQueue,
     logString :: String -> m (),
     logStep :: Step basicSet set constraint -> m ()
   }
-
-data Step basicSet set constraint
-  = InitStep
-      { scope :: basicSet,
-        constraint :: constraint
-      }
-  | PruningStep
-      { scope :: basicSet,
-        constraint :: constraint,
-        prunedScope :: Paving set,
-        prunedConstraint :: constraint
-      }
-  | SplitStep
-      { scope :: basicSet,
-        pieces :: [basicSet]
-      }
-  | GiveUpOnSetStep
-      { scope :: basicSet,
-        constraint :: constraint
-      }
-  | AbortStep
-  | DoneStep
 
 data Result set priorityQueue = Result
   { paving :: Paving set,
@@ -124,14 +102,15 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
       where
         initQueue = singletonQueue (scope, constraint)
         step :: Int -> Paving set -> priorityQueue -> m (Result set priorityQueue)
-        step threadNumber pavingSoFar queue
-          | shouldAbort pavingSoFar =
+        step threadNumber pavingSoFar queue =
+          case shouldAbort pavingSoFar of
+            Just abortDetail ->
               do
                 -- abort
-                logStep $ AbortStep
+                logStep $ AbortStep {detail = abortDetail}
                 logDebugThread "Stopping the B&P process."
                 pure $ Result {paving = pavingSoFar, queue, aborted = True}
-          | otherwise =
+            _ ->
               case queuePickNext queue of
                 Nothing ->
                   do
@@ -155,7 +134,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                         logDebugThread $ printf "Pruning on: %s" (show b)
                         (cPruned, prunePaving) <- pruneBasicSetM c b
                         logStep $
-                          PruningStep {scope = b, constraint = c, prunedScope = prunePaving, prunedConstraint = cPruned}
+                          PruneStep {scope = b, constraint = c, prunedScope = prunePaving, prunedConstraint = cPruned}
                         --
                         let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
                         if setIsEmpty prunePaving.undecided

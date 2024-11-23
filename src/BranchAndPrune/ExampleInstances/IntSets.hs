@@ -120,7 +120,7 @@ intSetBranchAndPrune (IntSetBPParams {..}) =
     ( BP.Params
         { BP.scope,
           BP.constraint,
-          BP.shouldAbort = const False :: BP.Paving IntSet -> Bool,
+          BP.shouldAbort = const Nothing,
           BP.shouldGiveUpOnBasicSet = const False :: BasicIntSet -> Bool,
           BP.dummyPriorityQueue,
           BP.maxThreads = 2,

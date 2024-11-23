@@ -34,6 +34,7 @@ library
       BranchAndPrune.ForkUtils
       BranchAndPrune.LogUtils
       BranchAndPrune.Sets
+      BranchAndPrune.Steps
   other-modules:
       Paths_branch_and_prune
   autogen-modules:

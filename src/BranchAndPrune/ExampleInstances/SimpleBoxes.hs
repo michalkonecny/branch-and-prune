@@ -244,7 +244,7 @@ boxBranchAndPrune (BoxBPParams {..}) = do
     ( BP.Params
         { BP.scope,
           BP.constraint,
-          BP.shouldAbort = const False :: BP.Paving Boxes -> Bool,
+          BP.shouldAbort = const Nothing,
           BP.shouldGiveUpOnBasicSet = shouldGiveUpOnBox giveUpAccuracy :: Box -> Bool,
           BP.dummyPriorityQueue,
           BP.maxThreads,
