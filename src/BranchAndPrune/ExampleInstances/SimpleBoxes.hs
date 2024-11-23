@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -28,10 +29,15 @@ import BranchAndPrune.ExampleInstances.RealConstraints
 import BranchAndPrune.LogUtils (logDebugStr)
 import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO)
 import Control.Monad.Logger (MonadLogger)
+import Data.Aeson qualified as Aeson
 import Data.List (sortOn)
 import Data.List qualified as List
 import Data.Map qualified as Map
+import Data.String (IsString (..)) -- for OverloadedStrings
 -- import Database.Redis qualified as Redis
+import Data.Text.Lazy qualified as T
+import Data.Text.Lazy.Encoding qualified as TE
+import GHC.Generics
 import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
@@ -40,6 +46,22 @@ import Prelude qualified as P
 {- N-dimensional Boxes -}
 
 data Box = Box {varDomains :: Map.Map Var MP.MPBall, splitOrder :: [Var]}
+
+deriving instance (Generic Box)
+
+instance Aeson.ToJSON Box where
+  toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
+
+instance Aeson.ToJSON Boxes where
+  toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
+
+instance Aeson.ToJSON MP.MPBall where
+  toJSON b = Aeson.object ["l" .= lD, "u" .= uD]
+    where
+      (l, u) = MP.endpoints b
+      lD = double l
+      uD = double u
+      (.=) = (Aeson..=)
 
 instance Show Box where
   show (Box {..}) =
@@ -82,6 +104,8 @@ data Boxes
   = Boxes [Box]
   | BoxesUnion [Boxes]
   deriving (P.Eq, Show)
+
+deriving instance (Generic Boxes)
 
 boxesCount :: Boxes -> Integer
 boxesCount (Boxes boxes) = length boxes
@@ -270,8 +294,11 @@ boxBranchAndPrune (BoxBPParams {..}) = do
       | otherwise = const (pure ())
 
     logStep
-      | logConfig P.== LogStepsToConsole = liftIO . putStrLn . formatStep
+      | logConfig P.== LogStepsToConsole = liftIO . putStrLn . stepToJSON
       | otherwise = const (pure ())
 
-    formatStep step =
-      (replicate 100 '-') ++ "\n" ++ (show step)
+    stepToJSON step =
+      (replicate 100 '-') ++ "\n" ++
+      case TE.decodeUtf8' $ Aeson.encode step of
+        Left err -> "Failed to decode UTF8: " ++ (show err)
+        Right stepT -> T.unpack stepT

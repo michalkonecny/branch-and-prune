@@ -51,6 +51,7 @@ library
   build-depends:
       aern2-affarith
     , aern2-mp
+    , aeson
     , base >=4.7 && <5
     , containers
     , hedis
@@ -83,6 +84,7 @@ test-suite branch-and-prune-test
   build-depends:
       aern2-affarith
     , aern2-mp
+    , aeson
     , base >=4.7 && <5
     , branch-and-prune
     , containers

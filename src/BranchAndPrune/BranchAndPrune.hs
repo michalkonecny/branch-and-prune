@@ -34,7 +34,7 @@ data Params m basicSet set priorityQueue constraint = Params
     maxThreads :: Integer,
     dummyPriorityQueue :: priorityQueue,
     logString :: String -> m (),
-    logStep :: Step basicSet set constraint -> m ()
+    logStep :: Step basicSet set -> m ()
   }
 
 data Result set priorityQueue = Result
@@ -97,7 +97,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
   where
     bpProcess numberOfThreadsTV = do
       -- init
-      logStep $ InitStep {scope, constraint}
+      logStep $ InitStep {scope, constraint = show constraint}
       step 0 emptyPaving initQueue
       where
         initQueue = singletonQueue (scope, constraint)
@@ -124,7 +124,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                     if shouldGiveUpOnBasicSet b
                       then do
                         -- give up
-                        logStep $ GiveUpOnSetStep {scope = b, constraint = c}
+                        logStep $ GiveUpOnSetStep {scope = b, constraint = show c}
                         logDebugThread $ printf "Leaving undecided on: %s" (show b)
                         let undecidedWithB = pavingSoFar.undecided `setUnion` fromBasicSets [b]
                         let pavingWithB = pavingSoFar {undecided = undecidedWithB}
@@ -134,7 +134,7 @@ branchAndPruneM (Params {..} :: Params m basicSet set priorityQueue constraint) 
                         logDebugThread $ printf "Pruning on: %s" (show b)
                         (cPruned, prunePaving) <- pruneBasicSetM c b
                         logStep $
-                          PruneStep {scope = b, constraint = c, prunedScope = prunePaving, prunedConstraint = cPruned}
+                          PruneStep {scope = b, constraint = show c, prunedScope = prunePaving, prunedConstraint = show cPruned}
                         --
                         let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
                         if setIsEmpty prunePaving.undecided

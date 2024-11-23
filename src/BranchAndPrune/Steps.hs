@@ -5,18 +5,20 @@ module BranchAndPrune.Steps
   )
 where
 
-import BranchAndPrune.Sets (Paving)
+import BranchAndPrune.Sets (Paving (..))
+import Data.Aeson qualified as A
+import GHC.Generics
 
-data Step basicSet set constraint
+data Step basicSet set
   = InitStep
       { scope :: basicSet,
-        constraint :: constraint
+        constraint :: String
       }
   | PruneStep
       { scope :: basicSet,
-        constraint :: constraint,
+        constraint :: String,
         prunedScope :: Paving set,
-        prunedConstraint :: constraint
+        prunedConstraint :: String
       }
   | SplitStep
       { scope :: basicSet,
@@ -24,10 +26,18 @@ data Step basicSet set constraint
       }
   | GiveUpOnSetStep
       { scope :: basicSet,
-        constraint :: constraint
+        constraint :: String
       }
   | AbortStep
       { detail :: String
       }
   | DoneStep
-  deriving (Show)
+  deriving (Show, Generic)
+
+deriving instance (Generic (Paving set))
+
+instance (A.ToJSON set) => A.ToJSON (Paving set) where
+  toEncoding = A.genericToEncoding A.defaultOptions
+
+instance (A.ToJSON basicSet, A.ToJSON set) => A.ToJSON (Step basicSet set) where
+  toEncoding = A.genericToEncoding A.defaultOptions
