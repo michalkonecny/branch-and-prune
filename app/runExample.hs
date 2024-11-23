@@ -19,11 +19,12 @@ import BranchAndPrune.ExampleInstances.SimpleBoxes
     BoxBPParams (..),
     ExprB,
     FormB,
+    LogConfig (..),
     boxBranchAndPrune,
     mkBox,
   )
 import Control.Monad.IO.Unlift (MonadIO (liftIO), MonadUnliftIO)
-import Control.Monad.Logger (MonadLogger, NoLoggingT (runNoLoggingT), runStdoutLoggingT)
+import Control.Monad.Logger (MonadLogger, runStdoutLoggingT)
 import Data.List qualified as List
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
@@ -128,18 +129,21 @@ sampleMPAffine = MPAffine _conf (convertExactly 0) Map.empty
     _conf :: MPAffineConfig
     _conf = MPAffineConfig {maxTerms = int 10, precision = 1000}
 
-processArgs :: (ProblemR r) => r -> [String] -> (Problem r, Rational, Integer, Bool)
-processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, debugS] =
-  (prob, giveUpAccuracy, maxThreads, debug)
+processArgs :: (ProblemR r) => r -> [String] -> (Problem r, Rational, Integer, LogConfig)
+processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, logConfigS] =
+  (prob, giveUpAccuracy, maxThreads, logConfig)
   where
     prob = fromJust $ Map.lookup probS (problems sampleR eps)
     eps = toRational (read epsS :: Double)
     giveUpAccuracy = toRational (read giveUpAccuracyS :: Double)
     maxThreads = read maxThreadsS :: Integer
-    debug = debugS == "debug"
+    logConfig = case logConfigS of
+      "debug" -> LogToConsole
+      "steps" -> LogStepsToConsole
+      _ -> DoNotLog
 processArgs _ _ =
   error
-    $ "Failed to match args.  Expected args: arithmetic problem eps giveUpAccuracy maxThreads debug"
+    $ "Failed to match args.  Expected args: arithmetic problem eps giveUpAccuracy maxThreads logConfig"
     ++ "\n Available arithmetics: IA, AA"
     ++ "\n Available problems: "
     ++ (List.concat $ List.map ("\n" ++) problemNames)
@@ -163,11 +167,9 @@ main = do
     _ ->
       error $ "unknown arithmetic: " ++ arith
 
-mainWithArgs :: (ProblemR r) => (Problem r, Rational, Integer, Bool) -> IO ()
-mainWithArgs (Problem {scope, constraint} :: Problem r, giveUpAccuracy, maxThreads, debug) =
-  if debug
-    then runStdoutLoggingT task
-    else runNoLoggingT task
+mainWithArgs :: (ProblemR r) => (Problem r, Rational, Integer, LogConfig) -> IO ()
+mainWithArgs (Problem {scope, constraint} :: Problem r, giveUpAccuracy, maxThreads, logConfig) =
+  runStdoutLoggingT task
   where
     task :: (MonadLogger m, MonadUnliftIO m) => m ()
     task = do
@@ -177,6 +179,7 @@ mainWithArgs (Problem {scope, constraint} :: Problem r, giveUpAccuracy, maxThrea
             { maxThreads,
               giveUpAccuracy = giveUpAccuracy,
               scope,
-              constraint
+              constraint,
+              logConfig
             }
       liftIO $ putStrLn $ showPavingSummary paving

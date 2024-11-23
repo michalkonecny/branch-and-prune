@@ -13,28 +13,29 @@ module BranchAndPrune.ExampleInstances.SimpleBoxes
     ExprB,
     FormB,
     BoxBPParams (..),
+    LogConfig (..),
     boxBranchAndPrune,
   )
 where
 
 import AERN2.MP (Kleenean (..), MPBall)
 import AERN2.MP qualified as MP
+import AERN2.MP.Ball (CentreRadius (CentreRadius))
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
 import AERN2.MP.Dyadic (dyadic)
 import BranchAndPrune.BranchAndPrune qualified as BP
 import BranchAndPrune.ExampleInstances.RealConstraints
+import BranchAndPrune.LogUtils (logDebugStr)
 import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.List (sortOn)
 import Data.List qualified as List
 import Data.Map qualified as Map
-import Database.Redis qualified as Redis
+-- import Database.Redis qualified as Redis
 import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import Prelude qualified as P
-import AERN2.MP.Ball (CentreRadius(CentreRadius))
-import BranchAndPrune.LogUtils (logDebugStr)
 
 {- N-dimensional Boxes -}
 
@@ -193,14 +194,13 @@ simplifyOnBox box = simplify
         (FormTrue, simplifiedF2) -> simplifiedF2
         (simplifiedF1, FormFalse) -> FormUnary ConnNeg simplifiedF1
         (simplifiedF1, simplifiedF2) -> FormBinary ConnImpl simplifiedF1 simplifiedF2
-    simplify (FormIfThenElse fc ft ff) =      
+    simplify (FormIfThenElse fc ft ff) =
       case (simplify fc, simplify ft, simplify ff) of
         (FormTrue, simplifiedT, _) -> simplifiedT
         (FormFalse, _, simplifiedF) -> simplifiedF
         (_, FormTrue, FormTrue) -> FormTrue
         (_, FormFalse, FormFalse) -> FormFalse
         (simplifiedC, simplifiedT, simplifiedF) -> FormIfThenElse simplifiedC simplifiedT simplifiedF
-        
     simplify FormTrue = FormTrue
     simplify FormFalse = FormFalse
 
@@ -225,8 +225,17 @@ data BoxBPParams r = BoxBPParams
   { scope :: Box,
     constraint :: FormB r,
     maxThreads :: Integer,
-    giveUpAccuracy :: Rational
+    giveUpAccuracy :: Rational,
+    logConfig :: LogConfig
   }
+
+data LogConfig where
+  DoNotLog :: LogConfig
+  LogToConsole :: LogConfig
+  LogStepsToConsole :: LogConfig
+  -- LogStepsToFile :: FilePath -> LogConfig
+  -- LogStepsToRedisStream :: String -> LogConfig
+  deriving (P.Eq)
 
 shouldGiveUpOnBox :: Rational -> Box -> Bool
 shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
@@ -239,7 +248,7 @@ shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
 
 boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) => BoxBPParams r -> m (BP.Result Boxes (BoxStack r))
 boxBranchAndPrune (BoxBPParams {..}) = do
-  conn <- liftIO $ Redis.checkedConnect Redis.defaultConnectInfo
+  -- conn <- liftIO $ Redis.checkedConnect Redis.defaultConnectInfo
   BP.branchAndPruneM
     ( BP.Params
         { BP.scope,
@@ -248,10 +257,21 @@ boxBranchAndPrune (BoxBPParams {..}) = do
           BP.shouldGiveUpOnBasicSet = shouldGiveUpOnBox giveUpAccuracy :: Box -> Bool,
           BP.dummyPriorityQueue,
           BP.maxThreads,
-          BP.logString = logDebugStr,
-          BP.logStep = \ _ -> pure () -- do nothing, TODO: write to Redis
+          BP.logString = logString,
+          BP.logStep = logStep
         }
     )
   where
     dummyPriorityQueue :: BoxStack r
     dummyPriorityQueue = BoxStack [(undefined :: Box, FormFalse)]
+
+    logString
+      | logConfig P.== LogToConsole = logDebugStr
+      | otherwise = const (pure ())
+
+    logStep
+      | logConfig P.== LogStepsToConsole = liftIO . putStrLn . formatStep
+      | otherwise = const (pure ())
+
+    formatStep step =
+      (replicate 100 '-') ++ "\n" ++ (show step)

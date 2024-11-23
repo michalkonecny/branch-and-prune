@@ -30,3 +30,4 @@ data Step basicSet set constraint
       { detail :: String
       }
   | DoneStep
+  deriving (Show)
