@@ -123,7 +123,7 @@ data IntSetBPParams = IntSetBPParams
 intSetBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => IntSetBPParams -> m (BP.Result IntSet IntSetStack)
 intSetBranchAndPrune (IntSetBPParams {..}) =
   BP.branchAndPruneM
-    (defaultLogConfig {shouldLogDebugMessages = True})
+    (defaultBPLogConfig {shouldLogDebugMessages = True})
     ( BP.Params
         { BP.scope,
           BP.constraint,

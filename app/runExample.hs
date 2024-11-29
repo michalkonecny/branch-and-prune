@@ -19,7 +19,7 @@ import BranchAndPrune.ExampleInstances.SimpleBoxes
     BoxBPParams (..),
     ExprB,
     FormB,
-    LogConfig (..),
+    BPLogConfig (..),
     boxBranchAndPrune,
     mkBox,
   )
@@ -31,7 +31,7 @@ import Data.Maybe (fromJust)
 -- import GHC.Records
 import MixedTypesNumPrelude
 import System.Environment (getArgs)
-import BranchAndPrune.Logging (defaultLogConfig)
+import BranchAndPrune.Logging (defaultBPLogConfig)
 
 -- import qualified Prelude as P
 
@@ -130,7 +130,7 @@ sampleMPAffine = MPAffine _conf (convertExactly 0) Map.empty
     _conf :: MPAffineConfig
     _conf = MPAffineConfig {maxTerms = int 10, precision = 1000}
 
-processArgs :: (ProblemR r) => r -> [String] -> (Problem r, Rational, Integer, LogConfig)
+processArgs :: (ProblemR r) => r -> [String] -> (Problem r, Rational, Integer, BPLogConfig)
 processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, logConfigS] =
   (prob, giveUpAccuracy, maxThreads, logConfig)
   where
@@ -139,9 +139,9 @@ processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, logConfigS] =
     giveUpAccuracy = toRational (read giveUpAccuracyS :: Double)
     maxThreads = read maxThreadsS :: Integer
     logConfig = case logConfigS of
-      "debug" -> defaultLogConfig { shouldLogDebugMessages = True }
-      "steps" -> defaultLogConfig { stepsFile = Just "steps.json" }
-      _ -> defaultLogConfig
+      "debug" -> defaultBPLogConfig { shouldLogDebugMessages = True }
+      "logsteps" -> defaultBPLogConfig { stepsFile = Just "steps.json" }
+      _ -> defaultBPLogConfig
 processArgs _ _ =
   error
     $ "Failed to match args.  Expected args: arithmetic problem eps giveUpAccuracy maxThreads logConfig"
@@ -168,7 +168,7 @@ main = do
     _ ->
       error $ "unknown arithmetic: " ++ arith
 
-mainWithArgs :: (ProblemR r) => (Problem r, Rational, Integer, LogConfig) -> IO ()
+mainWithArgs :: (ProblemR r) => (Problem r, Rational, Integer, BPLogConfig) -> IO ()
 mainWithArgs (Problem {scope, constraint} :: Problem r, giveUpAccuracy, maxThreads, logConfig) =
   runStdoutLoggingT task
   where

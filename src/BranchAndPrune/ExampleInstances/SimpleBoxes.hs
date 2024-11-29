@@ -14,25 +14,21 @@ module BranchAndPrune.ExampleInstances.SimpleBoxes
     ExprB,
     FormB,
     BoxBPParams (..),
-    LogConfig (..),
+    BPLogConfig (..),
     boxBranchAndPrune,
   )
 where
 
 import AERN2.MP (Kleenean (..), MPBall)
 import AERN2.MP qualified as MP
-import AERN2.MP.Ball (CentreRadius (CentreRadius))
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
-import AERN2.MP.Dyadic (dyadic)
 import BranchAndPrune.BranchAndPrune qualified as BP
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
 import BranchAndPrune.ExampleInstances.SimpleBoxes.JSON ()
 import BranchAndPrune.ExampleInstances.RealConstraints
 import BranchAndPrune.Logging
-import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO)
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
-import Data.Aeson qualified as Aeson
-import Data.List (sortOn)
 import Data.List qualified as List
 import Data.Map qualified as Map
 import Data.String (IsString (..)) -- for OverloadedStrings
@@ -40,7 +36,7 @@ import Data.String (IsString (..)) -- for OverloadedStrings
 import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
-import Prelude qualified as P
+-- import Prelude qualified as P
 
 instance BP.IsSet Boxes where
   emptySet = Boxes []
@@ -177,7 +173,7 @@ data BoxBPParams r = BoxBPParams
     constraint :: FormB r,
     maxThreads :: Integer,
     giveUpAccuracy :: Rational,
-    logConfig :: LogConfig
+    logConfig :: BPLogConfig
   }
 
 shouldGiveUpOnBox :: Rational -> Box -> Bool

@@ -37,6 +37,7 @@ library
       BranchAndPrune.Logging
       BranchAndPrune.Sets
       BranchAndPrune.Steps
+      LoggingFunctions
   other-modules:
       Paths_branch_and_prune
   autogen-modules:
