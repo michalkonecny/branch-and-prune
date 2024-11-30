@@ -10,7 +10,7 @@ module BranchAndPrune.BranchAndPrune
   )
 where
 
-import BranchAndPrune.ForkUtils (HasIsAborted (..), decideWhetherToFork, forkAndMerge)
+import BranchAndPrune.ForkUtils (HasIsAborted (..), decideWhetherToFork, forkAndMerge, initThreadResources)
 import BranchAndPrune.Logging (BPLogConfig (..))
 import BranchAndPrune.Sets
 import BranchAndPrune.Steps
@@ -18,7 +18,6 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.Aeson qualified as A
-import GHC.Conc (newTVarIO)
 import LoggingFunctions (HasLoggingFunctions (..), LoggingFunctions (..))
 import Text.Printf (printf)
 
@@ -35,7 +34,7 @@ data Params m basicSet set priorityQueue constraint = Params
     constraint :: constraint,
     shouldAbort :: Paving set -> Maybe String,
     shouldGiveUpOnBasicSet :: basicSet -> Bool,
-    maxThreads :: Integer,
+    maxThreads :: Int,
     dummyPriorityQueue :: priorityQueue
   }
 
@@ -87,16 +86,16 @@ branchAndPruneM ::
 branchAndPruneM logConfig (Params {..} :: Params m basicSet set priorityQueue constraint) =
   do
     -- initialise process resources
-    numberOfThreadsTV <- liftIO $ newTVarIO 1
+    threadResources <- liftIO $ initThreadResources
     logResources <- initLogging
     -- run the process
-    result <- bpProcess logResources numberOfThreadsTV
+    result <- bpProcess logResources threadResources
     -- finalise process resources
     finaliseLogging logResources
     pure result
   where
     LoggingFunctions {..} = getLoggingFunctions logConfig
-    bpProcess logResources numberOfThreadsTV = do
+    bpProcess logResources threadResources = do
       logDebugStrR "B&P process starting"
       logStepR $ InitStep {scope, constraint = show constraint}
 
@@ -169,20 +168,20 @@ branchAndPruneM logConfig (Params {..} :: Params m basicSet set priorityQueue co
                             let queueWithPruningUndecided = queuePicked `queueAddMany` map (,cPruned) pruneUndecidedSplit
                             
                             -- is there capacity to split the job among two threads?
-                            forkInfo <- decideWhetherToFork numberOfThreadsTV maxThreads (queueSplit queueWithPruningUndecided)
+                            forkInfo <- decideWhetherToFork threadResources maxThreads (queueSplit queueWithPruningUndecided)
                             case forkInfo of
                               Just (queueL, queueR) ->
                                 do
                                   -- yes, fork the queue between two new threads
                                   logDebugStrT "Forking queue into two queues to process independently"
-                                  let compL = steps (threadNumber + 1) emptyPaving queueL
-                                  let compR = steps (threadNumber + 2) emptyPaving queueR
+                                  let compL = \threadNumberL -> steps threadNumberL emptyPaving queueL
+                                  let compR = \threadNumberR -> steps threadNumberR emptyPaving queueR
 
                                   -- This is what the forkAndMerge does, but in parallel:
                                   --    resultL <- compL
                                   --    resultR <- compR
                                   --    let result = resultL <> resultR
-                                  result <- forkAndMerge numberOfThreadsTV compL compR
+                                  result <- forkAndMerge threadResources compL compR
                                   pure $ baseResultOnPrevPaving pavingWithPruningDecided result
                               _ ->
                                 -- do not fork, continue with the current thread only

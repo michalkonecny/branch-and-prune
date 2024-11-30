@@ -1,12 +1,14 @@
 module BranchAndPrune.ForkUtils
   ( HasIsAborted (..),
+    ThreadResources (..),
+    initThreadResources,
     decideWhetherToFork,
     forkAndMerge,
   )
 where
 
 import Control.Concurrent (forkIO, killThread)
-import Control.Concurrent.STM (TVar, atomically, newTVarIO, readTVar, retry, writeTVar)
+import Control.Concurrent.STM (TVar, atomically, newTVar, newTVarIO, readTVar, retry, writeTVar)
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.IO.Unlift (MonadUnliftIO, toIO)
@@ -14,13 +16,30 @@ import Control.Monad.IO.Unlift (MonadUnliftIO, toIO)
 class HasIsAborted result where
   isAborted :: result -> Bool
 
+data ThreadResources = ThreadResources
+  { numberOfThreadsTV :: TVar Int,
+    nextThreadNumber :: TVar Int
+  }
+
+initThreadResources :: IO ThreadResources
+initThreadResources = do
+  numberOfThreadsTV <- atomically $ newTVar 1
+  nextThreadNumber <- atomically $ newTVar 1
+  return $ ThreadResources {..}
+
+getNextTwoThreadNumbers :: ThreadResources -> IO (Int, Int)
+getNextTwoThreadNumbers (ThreadResources {..}) = atomically $ do
+  n <- readTVar nextThreadNumber
+  writeTVar nextThreadNumber (n + 2)
+  pure (n, n+1)
+
 decideWhetherToFork ::
   (MonadIO m) =>
-  TVar Integer ->
-  Integer ->
+  ThreadResources ->
+  Int ->
   Maybe a ->
   m (Maybe a)
-decideWhetherToFork numberOfThreadsTV maxThreads maybeForkPossible =
+decideWhetherToFork (ThreadResources {..}) maxThreads maybeForkPossible =
   do
     liftIO $ atomically $ do
       nOfThreads <- readTVar numberOfThreadsTV
@@ -32,14 +51,15 @@ decideWhetherToFork numberOfThreadsTV maxThreads maybeForkPossible =
 
 forkAndMerge ::
   (MonadUnliftIO m, HasIsAborted result, Semigroup result) =>
-  TVar Integer ->
-  m result ->
-  m result ->
+  ThreadResources ->
+  (Int -> m result) ->
+  (Int -> m result) ->
   m result
-forkAndMerge numberOfThreadsTV compL compR =
+forkAndMerge tr@(ThreadResources {..}) compL compR =
   do
-    compL_IO <- toIO compL
-    compR_IO <- toIO compR
+    (threaddNumber1, threaddNumber2) <- liftIO (getNextTwoThreadNumbers tr)
+    compL_IO <- toIO (compL threaddNumber1)
+    compR_IO <- toIO (compR threaddNumber2)
     liftIO $
       do
         -- create shared variables for results:

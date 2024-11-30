@@ -130,14 +130,14 @@ sampleMPAffine = MPAffine _conf (convertExactly 0) Map.empty
     _conf :: MPAffineConfig
     _conf = MPAffineConfig {maxTerms = int 10, precision = 1000}
 
-processArgs :: (ProblemR r) => r -> [String] -> (Problem r, Rational, Integer, BPLogConfig)
+processArgs :: (ProblemR r) => r -> [String] -> (Problem r, Rational, Int, BPLogConfig)
 processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, logConfigS] =
   (prob, giveUpAccuracy, maxThreads, logConfig)
   where
     prob = fromJust $ Map.lookup probS (problems sampleR eps)
     eps = toRational (read epsS :: Double)
     giveUpAccuracy = toRational (read giveUpAccuracyS :: Double)
-    maxThreads = read maxThreadsS :: Integer
+    maxThreads = read maxThreadsS :: Int
     logConfig = case logConfigS of
       "debug" -> defaultBPLogConfig { shouldLogDebugMessages = True }
       "logsteps" -> defaultBPLogConfig { stepsFile = Just "steps.json" }
@@ -168,7 +168,7 @@ main = do
     _ ->
       error $ "unknown arithmetic: " ++ arith
 
-mainWithArgs :: (ProblemR r) => (Problem r, Rational, Integer, BPLogConfig) -> IO ()
+mainWithArgs :: (ProblemR r) => (Problem r, Rational, Int, BPLogConfig) -> IO ()
 mainWithArgs (Problem {scope, constraint} :: Problem r, giveUpAccuracy, maxThreads, logConfig) =
   runStdoutLoggingT task
   where

@@ -171,7 +171,7 @@ instance BP.IsPriorityQueue (BoxStack r) (Box, FormB r) where
 data BoxBPParams r = BoxBPParams
   { scope :: Box,
     constraint :: FormB r,
-    maxThreads :: Integer,
+    maxThreads :: Int,
     giveUpAccuracy :: Rational,
     logConfig :: BPLogConfig
   }
