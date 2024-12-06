@@ -15,10 +15,11 @@ import BranchAndPrune.ExampleInstances.RealConstraints
     formImpl,
   )
 import BranchAndPrune.ExampleInstances.SimpleBoxes
-  ( Box (..),
+  ( Problem(..),
+    Box (..),
+    BoxProblem,
     BoxBPParams (..),
     ExprB,
-    FormB,
     BPLogConfig (..),
     boxBranchAndPrune,
     mkBox,
@@ -35,11 +36,6 @@ import BranchAndPrune.Logging (defaultBPLogConfig)
 
 -- import qualified Prelude as P
 
-data Problem r = Problem
-  { scope :: Box,
-    constraint :: FormB r
-  }
-
 type ProblemR r =
   ( CanGetVarDomain Box r,
     CanGetLiteral Box r,
@@ -54,7 +50,7 @@ type ProblemR r =
     EqCompareType r r ~ Kleenean
   )
 
-problems :: (ProblemR r) => r -> Rational -> Map.Map String (Problem r)
+problems :: (ProblemR r) => r -> Rational -> Map.Map String (BoxProblem r)
 problems (sampleR :: r) eps =
   Map.fromList
     [ ( "transitivityEps",
@@ -130,7 +126,7 @@ sampleMPAffine = MPAffine _conf (convertExactly 0) Map.empty
     _conf :: MPAffineConfig
     _conf = MPAffineConfig {maxTerms = int 10, precision = 1000}
 
-processArgs :: (ProblemR r) => r -> [String] -> (Problem r, Rational, Int, BPLogConfig)
+processArgs :: (ProblemR r) => r -> [String] -> (BoxProblem r, Rational, Int, BPLogConfig)
 processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, logConfigS] =
   (prob, giveUpAccuracy, maxThreads, logConfig)
   where
@@ -168,19 +164,18 @@ main = do
     _ ->
       error $ "unknown arithmetic: " ++ arith
 
-mainWithArgs :: (ProblemR r) => (Problem r, Rational, Int, BPLogConfig) -> IO ()
-mainWithArgs (Problem {scope, constraint} :: Problem r, giveUpAccuracy, maxThreads, logConfig) =
+mainWithArgs :: (ProblemR r) => (BoxProblem r, Rational, Int, BPLogConfig) -> IO ()
+mainWithArgs (problem, giveUpAccuracy, maxThreads, logConfig) =
   runStdoutLoggingT task
   where
     task :: (MonadLogger m, MonadUnliftIO m) => m ()
     task = do
-      (Result paving _ _) <-
+      (Result paving _) <-
         boxBranchAndPrune
           $ BoxBPParams
             { maxThreads,
               giveUpAccuracy = giveUpAccuracy,
-              scope,
-              constraint,
+              problem,
               logConfig
             }
       liftIO $ putStrLn $ showPavingSummary paving

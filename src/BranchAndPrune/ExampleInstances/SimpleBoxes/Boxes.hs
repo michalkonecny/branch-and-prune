@@ -1,11 +1,19 @@
 {-# LANGUAGE RebindableSyntax #-}
 
-module BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes where
+module BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
+  ( --
+    BP.Problem (..),
+    Box (..),
+    mkBox,
+    Boxes (..),
+  )
+where
 
 import AERN2.MP (MPBall)
 import AERN2.MP qualified as MP
 import AERN2.MP.Ball (CentreRadius (CentreRadius))
 import AERN2.MP.Dyadic (dyadic)
+import BranchAndPrune.BranchAndPrune qualified as BP
 import BranchAndPrune.ExampleInstances.RealConstraints (Var)
 import Data.List (sortOn)
 import Data.List qualified as List
@@ -70,3 +78,13 @@ boxesCount (BoxesUnion union) = sum (map boxesCount union)
 boxesAreaD :: Boxes -> Double
 boxesAreaD (Boxes boxes) = sum (map boxAreaD boxes)
 boxesAreaD (BoxesUnion union) = sum (map boxesAreaD union)
+
+instance BP.ShowStats Boxes where
+  showStats bs =
+    printf "{|boxes| = %d, area = %3.2f}" (boxesCount bs) (boxesAreaD bs)
+
+instance BP.IsSet Boxes where
+  emptySet = Boxes []
+  setIsEmpty (Boxes boxes) = null boxes
+  setIsEmpty (BoxesUnion union) = List.all BP.setIsEmpty union
+  setUnion bs1 bs2 = BoxesUnion [bs1, bs2]

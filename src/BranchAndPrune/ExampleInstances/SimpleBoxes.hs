@@ -6,8 +6,10 @@
 -- This module provides the ingredients needed to apply the branch and bound algorithm to
 -- solve real constraints with very simple pruning based only on straightforward interval evaluation.
 module BranchAndPrune.ExampleInstances.SimpleBoxes
-  ( Var,
+  ( BP.Problem (..),
+    Var,
     Box (..),
+    BoxProblem,
     mkBox,
     Boxes (..),
     BoxStack (..),
@@ -22,38 +24,27 @@ where
 import AERN2.MP (Kleenean (..), MPBall)
 import AERN2.MP qualified as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
+-- for OverloadedStrings
+-- import Database.Redis qualified as Redis
+
+import BranchAndPrune.BranchAndPrune (CanSplitProblem (splitProblem))
 import BranchAndPrune.BranchAndPrune qualified as BP
+import BranchAndPrune.ExampleInstances.RealConstraints
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
 import BranchAndPrune.ExampleInstances.SimpleBoxes.JSON ()
-import BranchAndPrune.ExampleInstances.RealConstraints
 import BranchAndPrune.Logging
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
-import Data.List qualified as List
 import Data.Map qualified as Map
-import Data.String (IsString (..)) -- for OverloadedStrings
--- import Database.Redis qualified as Redis
 import GHC.Records
 import MixedTypesNumPrelude
-import Text.Printf (printf)
+
 -- import Prelude qualified as P
 
-instance BP.IsSet Boxes where
-  emptySet = Boxes []
-  setIsEmpty (Boxes boxes) = null boxes
-  setIsEmpty (BoxesUnion union) = List.all BP.setIsEmpty union
-  setUnion bs1 bs2 = BoxesUnion [bs1, bs2]
-  setShowStats bs =
-    printf "{|boxes| = %d, area = %3.2f}" (boxesCount bs) (boxesAreaD bs)
-
-instance BP.SetFromBasic Box Boxes where
-  fromBasicSets = Boxes
-
-instance BP.CanSplitSet Box Boxes where
-  splitSet (Boxes boxes) = case boxes of
-    [box] -> splitBox box -- split since we should return at least two boxes if possible
-    _ -> boxes -- no box or at least two boxes
-  splitSet (BoxesUnion union) = List.concatMap BP.splitSet union
+{- Problem splitting -}
+instance BP.CanSplitProblem constraint Box where
+  splitProblem (BP.Problem {scope, constraint}) =
+    map (\box -> BP.Problem {scope = box, constraint}) $ splitBox scope
 
 splitBox :: Box -> [Box]
 splitBox box = case box.splitOrder of
@@ -84,6 +75,8 @@ type ExprB r = Expr Box r
 
 type FormB r = Form (ExprB r)
 
+type BoxProblem r = BP.Problem (FormB r) Box
+
 type HasKleenanComparison r =
   ( HasOrder r r,
     OrderCompareType r r ~ Kleenean,
@@ -91,15 +84,14 @@ type HasKleenanComparison r =
     EqCompareType r r ~ Kleenean
   )
 
-instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m Box (FormB r) Boxes where
-  pruneBasicSetM c b = pure (cP, pavingP)
+instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m (FormB r) Box Boxes where
+  pruneProblemM problem@(BP.Problem {scope, constraint}) = pure pavingP
     where
-      cP = simplifyOnBox b c
+      cP = simplifyOnBox scope constraint
       pavingP = case cP of
-        FormTrue -> BP.pavingInner bSet
-        FormFalse -> BP.pavingOuter bSet
-        _ -> BP.pavingUndecided bSet
-      bSet = BP.fromBasicSets [b]
+        FormTrue -> BP.pavingInner (Boxes [scope])
+        FormFalse -> BP.pavingOuter (Boxes [scope])
+        _ -> BP.pavingUndecided [problem]
 
 simplifyOnBox :: (HasKleenanComparison r) => Box -> FormB r -> FormB r
 simplifyOnBox box = simplify
@@ -151,9 +143,9 @@ simplifyOnBox box = simplify
     simplify FormTrue = FormTrue
     simplify FormFalse = FormFalse
 
-newtype BoxStack r = BoxStack [(Box, FormB r)]
+newtype BoxStack r = BoxStack [BoxProblem r]
 
-instance BP.IsPriorityQueue (BoxStack r) (Box, FormB r) where
+instance BP.IsPriorityQueue (BoxStack r) (BoxProblem r) where
   singletonQueue e = BoxStack [e]
   queueToList (BoxStack list) = list
   queuePickNext (BoxStack []) = Nothing
@@ -169,15 +161,14 @@ instance BP.IsPriorityQueue (BoxStack r) (Box, FormB r) where
   queueMerge (BoxStack stackL) (BoxStack stackR) = BoxStack $ stackL ++ stackR
 
 data BoxBPParams r = BoxBPParams
-  { scope :: Box,
-    constraint :: FormB r,
+  { problem :: BoxProblem r,
     maxThreads :: Int,
     giveUpAccuracy :: Rational,
     logConfig :: BPLogConfig
   }
 
-shouldGiveUpOnBox :: Rational -> Box -> Bool
-shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
+shouldGiveUpOnBoxProblem :: Rational -> BoxProblem r -> Bool
+shouldGiveUpOnBoxProblem giveUpAccuracy (BP.Problem {scope = Box {..}}) =
   all smallerThanPrec (Map.elems varDomains)
   where
     smallerThanPrec :: MPBall -> Bool
@@ -185,19 +176,19 @@ shouldGiveUpOnBox giveUpAccuracy (Box {..}) =
       where
         diameter = 2 * MP.radius ball
 
-boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) => BoxBPParams r -> m (BP.Result Boxes (BoxStack r))
-boxBranchAndPrune (BoxBPParams {..}) = do
+boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) => BoxBPParams r -> m (BP.Result (FormB r) Box Boxes)
+boxBranchAndPrune (BoxBPParams {..} :: BoxBPParams r) = do
   -- conn <- liftIO $ Redis.checkedConnect Redis.defaultConnectInfo
-  BP.branchAndPruneM logConfig
+  BP.branchAndPruneM
+    logConfig
     ( BP.Params
-        { BP.scope,
-          BP.constraint,
+        { BP.problem,
           BP.shouldAbort = const Nothing,
-          BP.shouldGiveUpOnBasicSet = shouldGiveUpOnBox giveUpAccuracy :: Box -> Bool,
+          BP.shouldGiveUpSolvingProblem = shouldGiveUpOnBoxProblem giveUpAccuracy :: BoxProblem r -> Bool,
           BP.dummyPriorityQueue,
           BP.maxThreads
         }
     )
   where
     dummyPriorityQueue :: BoxStack r
-    dummyPriorityQueue = BoxStack [(undefined :: Box, FormFalse)]
+    dummyPriorityQueue = BoxStack [problem]

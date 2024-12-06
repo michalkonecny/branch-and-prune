@@ -3,6 +3,7 @@
 
 module BranchAndPrune.BranchAndPrune
   ( module BranchAndPrune.Sets,
+    module BranchAndPrune.Paving,
     IsPriorityQueue (..),
     Params (..),
     Result (..),
@@ -12,12 +13,14 @@ where
 
 import BranchAndPrune.ForkUtils (HasIsAborted (..), decideWhetherToFork, forkAndMerge, initThreadResources)
 import BranchAndPrune.Logging (BPLogConfig (..))
+import BranchAndPrune.Paving
 import BranchAndPrune.Sets
 import BranchAndPrune.Steps
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.Aeson qualified as A
+import Data.Maybe (isJust)
 import LoggingFunctions (HasLoggingFunctions (..), LoggingFunctions (..))
 import Text.Printf (printf)
 
@@ -30,66 +33,69 @@ class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   queueMerge :: priorityQueue -> priorityQueue -> priorityQueue
 
 data Params m basicSet set priorityQueue constraint = Params
-  { scope :: basicSet,
-    constraint :: constraint,
-    shouldAbort :: Paving set -> Maybe String,
-    shouldGiveUpOnBasicSet :: basicSet -> Bool,
+  { problem :: Problem constraint basicSet,
+    shouldAbort :: Paving constraint basicSet set -> Maybe String,
+    shouldGiveUpSolvingProblem :: Problem constraint basicSet -> Bool,
     maxThreads :: Int,
     dummyPriorityQueue :: priorityQueue
   }
 
-data Result set priorityQueue = Result
-  { paving :: Paving set,
-    queue :: priorityQueue,
-    aborted :: Bool
+data Result constraint basicSet set = Result
+  { paving :: Paving constraint basicSet set,
+    aborted :: Maybe String
   }
 
-instance HasIsAborted (Result set priorityQueue) where
-  isAborted result = result.aborted
+instance HasIsAborted (Result constraint basicSet set) where
+  isAborted result = isJust result.aborted
 
 instance
-  (IsSet set, IsPriorityQueue priorityQueue elem) =>
-  Semigroup (Result set priorityQueue)
+  (IsSet set) =>
+  Semigroup (Result constraint basicSet set)
   where
   (<>) resL resR =
     Result
       { paving = resL.paving `pavingMerge` resR.paving,
-        queue = resL.queue `queueMerge` resR.queue,
-        aborted = resL.aborted || resR.aborted
+        aborted = case (resL.aborted, resR.aborted) of
+          (Just detailL, Just detailR) -> Just (detailL <> "; " <> detailR)
+          (Just detailL, _) -> Just detailL
+          (_, Just detailR) -> Just detailR
+          _ -> Nothing
       }
 
 baseResultOnPrevPaving ::
   (IsSet set) =>
-  Paving set ->
-  Result set priorityQueue ->
-  Result set priorityQueue
+  Paving constraint basicSet set ->
+  Result constraint basicSet set ->
+  Result constraint basicSet set
 baseResultOnPrevPaving prevPaving res =
   res {paving = prevPaving `pavingMerge` res.paving}
 
 branchAndPruneM ::
   ( IsSet set,
-    SetFromBasic basicSet set,
-    CanSplitSet basicSet set,
-    CanPrune m basicSet constraint set,
-    IsPriorityQueue priorityQueue (basicSet, constraint),
+    CanSplitProblem constraint basicSet,
+    CanPrune m constraint basicSet set,
+    IsPriorityQueue priorityQueue (Problem constraint basicSet),
     MonadLogger m,
     MonadUnliftIO m,
+    Show constraint,
     Show basicSet,
     Show set,
-    Show constraint,
+    A.ToJSON constraint,
     A.ToJSON basicSet,
     A.ToJSON set
   ) =>
   BPLogConfig ->
   Params m basicSet set priorityQueue constraint ->
-  m (Result set priorityQueue)
-branchAndPruneM logConfig (Params {..} :: Params m basicSet set priorityQueue constraint) =
+  m (Result constraint basicSet set)
+branchAndPruneM logConfig (Params {problem = initialProblem, ..} :: Params m basicSet set priorityQueue constraint) =
   do
     -- initialise process resources
     threadResources <- liftIO $ initThreadResources
     logResources <- initLogging
+
     -- run the process
     result <- bpProcess logResources threadResources
+
     -- finalise process resources
     finaliseLogging logResources
     pure result
@@ -97,9 +103,10 @@ branchAndPruneM logConfig (Params {..} :: Params m basicSet set priorityQueue co
     LoggingFunctions {..} = getLoggingFunctions logConfig
     bpProcess logResources threadResources = do
       logDebugStrR "B&P process starting"
-      logStepR $ InitStep {scope, constraint = show constraint}
+      logStepR $ InitStep {problem = initialProblem}
 
-      let initQueue = singletonQueue (scope, constraint)
+      -- start the recursive and parallel paving process with initial problem in the queue
+      let initQueue = singletonQueue initialProblem
       result <- steps 0 emptyPaving initQueue
 
       logDebugStrR "B&P process finishing"
@@ -110,7 +117,7 @@ branchAndPruneM logConfig (Params {..} :: Params m basicSet set priorityQueue co
         logStepR = logStep logResources
         logDebugStrR = logDebugStr logResources
 
-        steps :: Int -> Paving set -> priorityQueue -> m (Result set priorityQueue)
+        steps :: Int -> Paving constraint basicSet set -> priorityQueue -> m (Result constraint basicSet set)
         steps threadNumber pavingSoFar queue =
           -- first check if the paving allows us to abort (e.g. a model has been found)
           case shouldAbort pavingSoFar of
@@ -119,7 +126,7 @@ branchAndPruneM logConfig (Params {..} :: Params m basicSet set priorityQueue co
                 -- abort
                 logStepR $ AbortStep {detail = abortDetail}
                 logDebugStrT $ "Aborting the B&P process: " ++ abortDetail
-                pure $ Result {paving = pavingSoFar, queue, aborted = True}
+                pure $ Result {paving = pavingSoFar, aborted = Just abortDetail}
             _ ->
               -- pick the next sub-problem from the queue (if any)
               case queuePickNext queue of
@@ -127,46 +134,49 @@ branchAndPruneM logConfig (Params {..} :: Params m basicSet set priorityQueue co
                   do
                     -- done - fully paved this thread's portion
                     logDebugStrT "The queue is empty, finishing this thread."
-                    pure $ Result {paving = pavingSoFar, queue, aborted = False}
-                Just ((b, c), queuePicked) ->
+                    pure $ Result {paving = pavingSoFar, aborted = Nothing}
+                Just (problem, queuePicked) ->
                   do
-                    logDebugStrT $ printf "Picked set %s, constraint %s" (show b) (show c)
+                    logDebugStrT $ printf "Picked problem: %s" (show problem)
                     -- check if we should dig deeper into the next basic set or give up
-                    if shouldGiveUpOnBasicSet b
+                    if shouldGiveUpSolvingProblem problem
                       then do
                         -- report giving up
-                        logDebugStrT $ printf "Leaving undecided on: %s" (show b)
-                        logStepR $ GiveUpOnSetStep {scope = b, constraint = show c}
+                        logDebugStrT $ printf "Leaving problem undecided on: %s" (show problem.scope)
+                        logStepR $ GiveUpOnProblemStep {problem}
 
-                        -- register the basic set as undecided and continue
-                        let undecidedWithB = pavingSoFar.undecided `setUnion` fromBasicSets [b]
-                        let pavingWithB = pavingSoFar {undecided = undecidedWithB}
-                        steps threadNumber pavingWithB queuePicked
+                        -- register problem as undecided and continue
+                        let undecidedWithP = problem : pavingSoFar.undecided
+                        let pavingWithP = pavingSoFar {undecided = undecidedWithP}
+                        steps threadNumber pavingWithP queuePicked
                       else do
                         -- pruning the next basic set
-                        logDebugStrT $ printf "Pruning on: %s" (show b)
-                        (cPruned, prunePaving) <- pruneBasicSetM c b
-                        let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
-                        logStepR $
-                          PruneStep {scope = b, constraint = show c, prunedScope = prunePaving, prunedConstraint = show cPruned}
-                        
-                        -- check if the pruning fully decided the sub-problem
-                        if setIsEmpty prunePaving.undecided
-                          then do
-                            -- done on b
-                            logDebugStrT $ printf "Fully solved on %s: %s" (show b) (show prunePaving)
+                        logDebugStrT $ printf "Pruning on: %s" (show problem)
+                        prunePaving <- pruneProblemM problem
+                        logStepR $ PruneStep {problem, prunePaving}
 
-                            -- add b to the paving and continue
+                        -- register what the pruning decided
+                        let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
+
+                        -- check if the pruning fully decided the sub-problem
+                        if null prunePaving.undecided
+                          then do
+                            -- fully solved problem
+                            logDebugStrT $ printf "Fully solved %s: %s" (show problem) (show prunePaving)
+
+                            -- continue
                             steps threadNumber pavingWithPruningDecided queuePicked
                           else do
-                            -- not done on b, splitting the undecided subset of b
-                            let pruneUndecidedSplit = splitSet prunePaving.undecided
+                            -- problem not fully solved by pruning, splitting the undecided sub-problems
+                            let pruneUndecidedSplit = case prunePaving.undecided of
+                                  [p] -> splitProblem p
+                                  problems -> problems
                             logDebugStrT $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
-                            logStepR $ SplitStep {scope = b, pieces = pruneUndecidedSplit}
+                            logStepR $ SplitStep {problem, pieces = pruneUndecidedSplit}
 
                             -- add the subset left-over from pruning to the queue
-                            let queueWithPruningUndecided = queuePicked `queueAddMany` map (,cPruned) pruneUndecidedSplit
-                            
+                            let queueWithPruningUndecided = queuePicked `queueAddMany` pruneUndecidedSplit
+
                             -- is there capacity to split the job among two threads?
                             forkInfo <- decideWhetherToFork threadResources maxThreads (queueSplit queueWithPruningUndecided)
                             case forkInfo of

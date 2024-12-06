@@ -35,6 +35,7 @@ library
       BranchAndPrune.ExampleInstances.SimpleBoxes.JSON
       BranchAndPrune.ForkUtils
       BranchAndPrune.Logging
+      BranchAndPrune.Paving
       BranchAndPrune.Sets
       BranchAndPrune.Steps
       LoggingFunctions
@@ -56,6 +57,7 @@ library
     , aern2-mp
     , aeson
     , base >=4.7 && <5
+    , bytestring
     , containers
     , hedis
     , mixed-types-num
@@ -90,6 +92,7 @@ test-suite branch-and-prune-test
     , aeson
     , base >=4.7 && <5
     , branch-and-prune
+    , bytestring
     , containers
     , hedis
     , hspec

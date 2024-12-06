@@ -24,6 +24,7 @@ dependencies:
 # - row-types
 - containers
 - monad-logger
+- bytestring
 - text
 - time
 - unliftio-core

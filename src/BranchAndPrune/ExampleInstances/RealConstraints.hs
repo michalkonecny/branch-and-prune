@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+
 module BranchAndPrune.ExampleInstances.RealConstraints
   ( Var,
     Expr (..),
@@ -18,7 +19,7 @@ where
 import Data.Set as Set
 import MixedTypesNumPrelude
 import Text.Printf (printf)
-import qualified Prelude as P
+import Prelude qualified as P
 
 type Var = String
 
@@ -202,7 +203,7 @@ instance CanAndOrAsymmetric (Form expr) (Form expr) where
   or2 = formOr
 
 instance HasIfThenElse (Form expr) (Form expr) where
-  type IfThenElseType (Form expr) (Form expr) =  (Form expr)
+  type IfThenElseType (Form expr) (Form expr) = (Form expr)
   ifThenElse = formIfThenElse
 
 instance ConvertibleExactly Bool (Form expr) where

@@ -3,29 +3,40 @@
 module BranchAndPrune.ExampleInstances.SimpleBoxes.JSON () where
 
 import AERN2.MP qualified as MP
-import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
-import Data.Aeson qualified as Aeson
-import GHC.Generics
 -- import Database.Redis qualified as Redis
+
+import BranchAndPrune.ExampleInstances.RealConstraints (Expr (..), Form (..))
+import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes (Box (..), Boxes (..))
+import Data.Aeson qualified as A
+import GHC.Generics
+import GHC.Records ()
 import MixedTypesNumPrelude
+
 -- import Prelude qualified as P
 
 {- JSON serialisation -}
 
 deriving instance (Generic Boxes)
 
-instance Aeson.ToJSON Boxes where
-  toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
+instance A.ToJSON Boxes where
+  toEncoding = A.genericToEncoding A.defaultOptions
 
 deriving instance (Generic Box)
 
-instance Aeson.ToJSON Box where
-  toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
+instance A.ToJSON Box where
+  toEncoding = A.genericToEncoding A.defaultOptions
 
-instance Aeson.ToJSON MP.MPBall where
-  toJSON b = Aeson.object ["l" .= lD, "u" .= uD]
+instance A.ToJSON MP.MPBall where
+  toJSON b = A.object ["l" .= lD, "u" .= uD]
     where
       (l, u) = MP.endpoints b
       lD = double l
       uD = double u
-      (.=) = (Aeson..=)
+      (.=) = (A..=)
+
+instance A.ToJSON (Expr b r) where
+  toJSON e = A.toJSON e.description -- a dummy String JSON instance
+
+instance A.ToJSON (Form (Expr b r)) where
+  toJSON = A.toJSON . show -- a dummy String JSON instance
+

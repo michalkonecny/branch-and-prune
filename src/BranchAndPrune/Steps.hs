@@ -1,34 +1,27 @@
 {-# OPTIONS_GHC -Wno-partial-fields #-}
 
 module BranchAndPrune.Steps
-  ( Step (..), stepToJSON
+  ( Step (..),
   )
 where
 
-import BranchAndPrune.Sets (Paving (..))
 import Data.Aeson qualified as A
-import Data.Text.Lazy qualified as T
-import Data.Text.Lazy.Encoding qualified as TE
 import GHC.Generics
 
-data Step basicSet set
+data Step problem paving
   = InitStep
-      { scope :: basicSet,
-        constraint :: String
+      { problem :: problem
       }
   | PruneStep
-      { scope :: basicSet,
-        constraint :: String,
-        prunedScope :: Paving set,
-        prunedConstraint :: String
+      { problem :: problem,
+        prunePaving :: paving
       }
   | SplitStep
-      { scope :: basicSet,
-        pieces :: [basicSet]
+      { problem :: problem,
+        pieces :: [problem]
       }
-  | GiveUpOnSetStep
-      { scope :: basicSet,
-        constraint :: String
+  | GiveUpOnProblemStep
+      { problem :: problem
       }
   | AbortStep
       { detail :: String
@@ -36,16 +29,5 @@ data Step basicSet set
   | DoneStep
   deriving (Show, Generic)
 
-deriving instance (Generic (Paving set))
-
-instance (A.ToJSON set) => A.ToJSON (Paving set) where
+instance (A.ToJSON problem, A.ToJSON paving) => A.ToJSON (Step problem paving) where
   toEncoding = A.genericToEncoding A.defaultOptions
-
-instance (A.ToJSON basicSet, A.ToJSON set) => A.ToJSON (Step basicSet set) where
-  toEncoding = A.genericToEncoding A.defaultOptions
-
-stepToJSON :: (A.ToJSON basicSet, A.ToJSON set) => Step basicSet set -> String
-stepToJSON step =
-  case TE.decodeUtf8' $ A.encode step of
-    Left err -> "Failed to decode UTF8: " ++ (show err)
-    Right stepT -> T.unpack stepT
