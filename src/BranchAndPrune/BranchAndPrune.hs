@@ -16,6 +16,7 @@ import BranchAndPrune.Logging (BPLogConfig (..))
 import BranchAndPrune.Paving
 import BranchAndPrune.Sets
 import BranchAndPrune.Steps
+import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
@@ -154,7 +155,8 @@ branchAndPruneM logConfig (Params {problem = initialProblem, ..} :: Params m bas
                         -- pruning the next basic set
                         logDebugStrT $ printf "Pruning on: %s" (show problem)
                         prunePaving <- pruneProblemM problem
-                        logStepR $ PruneStep {problemHash, prunePaving}
+                        when (pavingHasInfo prunePaving) $ do
+                          logStepR $ PruneStep {problemHash, prunePaving}
 
                         -- register what the pruning decided
                         let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving

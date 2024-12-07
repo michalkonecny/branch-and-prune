@@ -12,6 +12,7 @@ module BranchAndPrune.Paving
     pavingInnerOuter,
     pavingInnerUndecided,
     pavingOuterUndecided,
+    pavingHasInfo,
   )
 where
 
@@ -57,6 +58,12 @@ emptyPaving scope =
       undecided = [],
       outer = emptySet
     }
+
+pavingHasInfo :: (IsSet set) => Paving constraint basicSet set -> Bool
+pavingHasInfo paving =
+  not (setIsEmpty paving.inner)
+    || not (setIsEmpty paving.outer)
+    || length paving.undecided > 1
 
 pavingMerge ::
   (IsSet set) =>
