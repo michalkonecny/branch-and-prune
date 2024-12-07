@@ -24,8 +24,6 @@ where
 import AERN2.MP (Kleenean (..), MPBall)
 import AERN2.MP qualified as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
--- for OverloadedStrings
--- import Database.Redis qualified as Redis
 
 import BranchAndPrune.BranchAndPrune (CanSplitProblem (splitProblem))
 import BranchAndPrune.BranchAndPrune qualified as BP
@@ -181,7 +179,7 @@ boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) =>
 boxBranchAndPrune (BoxBPParams {..} :: BoxBPParams r) = do
   -- conn <- liftIO $ Redis.checkedConnect Redis.defaultConnectInfo
   BP.branchAndPruneM
-    logConfig
+    (getLoggingFunctions logConfig)
     ( BP.Params
         { BP.problem,
           BP.shouldAbort = const Nothing,

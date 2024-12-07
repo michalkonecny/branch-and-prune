@@ -4,6 +4,7 @@
 module BranchAndPrune.BranchAndPrune
   ( module BranchAndPrune.Sets,
     module BranchAndPrune.Paving,
+    LoggingFunctions (..),
     IsPriorityQueue (..),
     Params (..),
     Result (..),
@@ -12,7 +13,6 @@ module BranchAndPrune.BranchAndPrune
 where
 
 import BranchAndPrune.ForkUtils (HasIsAborted (..), decideWhetherToFork, forkAndMerge, initThreadResources)
-import BranchAndPrune.Logging (BPLogConfig (..))
 import BranchAndPrune.Paving
 import BranchAndPrune.Sets
 import BranchAndPrune.Steps
@@ -20,10 +20,15 @@ import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
-import Data.Aeson qualified as A
 import Data.Maybe (isJust)
-import LoggingFunctions (HasLoggingFunctions (..), LoggingFunctions (..))
 import Text.Printf (printf)
+
+data LoggingFunctions resources step m = LoggingFunctions
+  { initLogging :: m resources,
+    logDebugStr :: resources -> String -> m (),
+    logStep :: resources -> step -> m (),
+    finaliseLogging :: resources -> m ()
+  }
 
 class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   singletonQueue :: elem -> priorityQueue
@@ -80,15 +85,12 @@ branchAndPruneM ::
     MonadUnliftIO m,
     Show constraint,
     Show basicSet,
-    Show set,
-    A.ToJSON constraint,
-    A.ToJSON basicSet,
-    A.ToJSON set
+    Show set
   ) =>
-  BPLogConfig ->
+  LoggingFunctions resources (Step (Problem constraint basicSet) (Paving constraint basicSet set)) m ->
   Params m basicSet set priorityQueue constraint ->
   m (Result constraint basicSet set)
-branchAndPruneM logConfig (Params {problem = initialProblem, ..} :: Params m basicSet set priorityQueue constraint) =
+branchAndPruneM (LoggingFunctions {..}) (Params {problem = initialProblem, ..} :: Params m basicSet set priorityQueue constraint) =
   do
     -- initialise process resources
     threadResources <- liftIO $ initThreadResources
@@ -101,7 +103,6 @@ branchAndPruneM logConfig (Params {problem = initialProblem, ..} :: Params m bas
     finaliseLogging logResources
     pure result
   where
-    LoggingFunctions {..} = getLoggingFunctions logConfig
     bpProcess logResources threadResources = do
       logDebugStrR "B&P process starting"
       logStepR $ InitStep {problem = initialProblem}

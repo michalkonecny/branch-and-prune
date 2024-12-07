@@ -3,7 +3,6 @@
 module BranchAndPrune.ExampleInstances.SimpleBoxes.JSON () where
 
 import AERN2.MP qualified as MP
--- import Database.Redis qualified as Redis
 
 import BranchAndPrune.ExampleInstances.RealConstraints (Expr (..), Form (..))
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes (Box (..), Boxes (..))
