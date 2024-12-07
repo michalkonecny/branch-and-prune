@@ -5,7 +5,7 @@ module Main (main) where
 import AERN2.MP (Kleenean, MPBall, mpBallP)
 import AERN2.MP qualified as MP
 import AERN2.MP.Affine (MPAffine (MPAffine), MPAffineConfig (..))
-import BranchAndPrune.BranchAndPrune (Result (Result), showPavingSummary)
+import BranchAndPrune.BranchAndPrune (Result (Result), showPavingSummary, Problem_ (..), mkProblem)
 import BranchAndPrune.ExampleInstances.RealConstraintEval.AffArith ()
 import BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall ()
 import BranchAndPrune.ExampleInstances.RealConstraints
@@ -15,8 +15,7 @@ import BranchAndPrune.ExampleInstances.RealConstraints
     formImpl,
   )
 import BranchAndPrune.ExampleInstances.SimpleBoxes
-  ( Problem(..),
-    Box (..),
+  ( Box (..),
     BoxProblem,
     BoxBPParams (..),
     ExprB,
@@ -54,37 +53,37 @@ problems :: (ProblemR r) => r -> Rational -> Map.Map String (BoxProblem r)
 problems (sampleR :: r) eps =
   Map.fromList
     [ ( "transitivityEps",
-        Problem
+        mkProblem $ Problem_
           { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))],
             constraint = (((x + eps) <= y) && (y <= z)) `formImpl` (x <= z)
           }
       ),
       ( "circleEps",
-        Problem
+        mkProblem $ Problem_
           { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
             constraint = (x * x - 2.0 * x * y + y * y <= 1.0) `formImpl` (x - y <= 1.0 + eps)
           }
       ),
       ( "circleEpsSqrt",
-        Problem
+        mkProblem $ Problem_
           { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
             constraint = ((sqrt $ x * x - 2.0 * x * y + y * y) <= 1.0) `formImpl` (x - y <= 1.0 + eps)
           }
       ),
       ( "quadraticReduction",
-        Problem
+        mkProblem $ Problem_
           { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
             constraint = 2.0 * x * x - 4.0 * x + 2.0 + y <= (-4.0) * (x - 1.0) + y
           }
       ),
       ( "cubicReduction",
-        Problem
+        mkProblem $ Problem_
           { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
             constraint = 6.0 * x * x * x + x * x - 10.0 * x + 3.0 + y <= (x - 1.0) * (x - 4.5) + y + eps
           }
       ),
       ( "vcApproxSinLE",
-        Problem
+        mkProblem $ Problem_
           { scope = mkBox [("r1", (-3819831 / 4194304, 7639661 / 8388608)), ("x", (-6851933 / 8388608, 6851933 / 8388608))],
             constraint =
               let t =

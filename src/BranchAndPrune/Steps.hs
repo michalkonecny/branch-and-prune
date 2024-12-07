@@ -13,15 +13,15 @@ data Step problem paving
       { problem :: problem
       }
   | PruneStep
-      { problem :: problem,
+      { problemHash :: Int,
         prunePaving :: paving
       }
   | SplitStep
-      { problem :: problem,
+      { problemHash :: Int,
         pieces :: [problem]
       }
   | GiveUpOnProblemStep
-      { problem :: problem
+      { problemHash :: Int
       }
   | AbortStep
       { detail :: String

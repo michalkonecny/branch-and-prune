@@ -8,7 +8,6 @@ import AERN2.MP qualified as MP
 import BranchAndPrune.ExampleInstances.RealConstraints (Expr (..), Form (..))
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes (Box (..), Boxes (..))
 import Data.Aeson qualified as A
-import GHC.Generics
 import GHC.Records ()
 import MixedTypesNumPrelude
 
@@ -16,12 +15,8 @@ import MixedTypesNumPrelude
 
 {- JSON serialisation -}
 
-deriving instance (Generic Boxes)
-
 instance A.ToJSON Boxes where
   toEncoding = A.genericToEncoding A.defaultOptions
-
-deriving instance (Generic Box)
 
 instance A.ToJSON Box where
   toEncoding = A.genericToEncoding A.defaultOptions

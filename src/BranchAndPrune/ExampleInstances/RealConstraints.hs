@@ -20,12 +20,19 @@ import Data.Set as Set
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import Prelude qualified as P
+import Data.Hashable (Hashable (hashWithSalt))
+import GHC.Generics (Generic)
 
 type Var = String
 
 {- Non-linear Expressions -}
 
-data Expr b r = Expr {eval :: b -> r, vars :: Set.Set Var, sampleR :: r, description :: String}
+data Expr b r = Expr
+  { eval :: b -> r,
+    vars :: Set.Set Var,
+    sampleR :: r,
+    description :: String
+  }
 
 class CanGetVarDomain b r where
   getVarDomain :: r -> b -> Var -> r
@@ -52,6 +59,9 @@ instance Show (Expr b r) where
 
 instance P.Eq (Expr b r) where
   expr1 == expr2 = expr1.description == expr2.description
+
+instance Hashable (Expr b r) where
+  hashWithSalt salt expr = hashWithSalt salt expr.description
 
 exprNeg :: (CanNegSameType r) => Expr b r -> Expr b r
 exprNeg e =
@@ -135,20 +145,26 @@ instance (CanMulSameType r, CanGetLiteral b r) => CanMulAsymmetric Rational (Exp
 {- Simple formulas over comparisons of expressions -}
 
 data BinaryComp = CompLeq | CompEq
-  deriving (P.Eq)
+  deriving (P.Eq, Generic)
+
+instance Hashable BinaryComp
 
 instance Show BinaryComp where
   show CompLeq = "<="
   show CompEq = "=="
 
 data UnaryConn = ConnNeg
-  deriving (P.Eq)
+  deriving (P.Eq, Generic)
 
 instance Show UnaryConn where
   show ConnNeg = "¬"
 
+instance Hashable UnaryConn
+
 data BinaryConn = ConnAnd | ConnOr | ConnImpl
-  deriving (P.Eq)
+  deriving (P.Eq, Generic)
+
+instance Hashable BinaryConn
 
 instance Show BinaryConn where
   show ConnAnd = "∧"
@@ -162,7 +178,9 @@ data Form expr
   | FormIfThenElse (Form expr) (Form expr) (Form expr)
   | FormTrue
   | FormFalse
-  deriving (P.Eq)
+  deriving (P.Eq, Generic)
+
+instance (Hashable expr) => Hashable (Form expr)
 
 instance (Show expr) => Show (Form expr) where
   show :: Form expr -> String

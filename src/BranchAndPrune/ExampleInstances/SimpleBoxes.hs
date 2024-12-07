@@ -35,6 +35,7 @@ import BranchAndPrune.ExampleInstances.SimpleBoxes.JSON ()
 import BranchAndPrune.Logging
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
+import Data.Hashable (Hashable)
 import Data.Map qualified as Map
 import GHC.Records
 import MixedTypesNumPrelude
@@ -42,9 +43,9 @@ import MixedTypesNumPrelude
 -- import Prelude qualified as P
 
 {- Problem splitting -}
-instance BP.CanSplitProblem constraint Box where
+instance (Hashable constraint) => BP.CanSplitProblem constraint Box where
   splitProblem (BP.Problem {scope, constraint}) =
-    map (\box -> BP.Problem {scope = box, constraint}) $ splitBox scope
+    map (\box -> BP.mkProblem $ BP.Problem_ {scope = box, constraint}) $ splitBox scope
 
 splitBox :: Box -> [Box]
 splitBox box = case box.splitOrder of

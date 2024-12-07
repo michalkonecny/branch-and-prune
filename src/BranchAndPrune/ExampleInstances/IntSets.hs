@@ -28,6 +28,7 @@ import Control.Monad.Logger (MonadLogger)
 import Data.Aeson qualified as A
 import Data.Set qualified as Set
 import GHC.Generics
+import Data.Hashable (Hashable)
 
 newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show, Generic)
 
@@ -41,18 +42,23 @@ instance BP.IsSet IntSet where
   setIsEmpty (IntSet set) = Set.null set
   setUnion (IntSet set1) (IntSet set2) = IntSet (Set.union set1 set2)
 
-data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int} deriving (Eq, Show, Generic)
+data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int}
+  deriving (Eq, Show, Generic)
+
+instance Hashable BasicIntSet
 
 instance A.ToJSON BasicIntSet
 
 data IntConstraint = IntEq Int | IntTrue | IntFalse -- \| IntNeq Int
   deriving (Eq, Show, Generic)
 
+instance Hashable IntConstraint
+
 instance A.ToJSON IntConstraint
 
 instance BP.CanSplitProblem IntConstraint BasicIntSet where
   splitProblem (BP.Problem {scope = BasicIntSet l u, constraint}) =
-    map (\bs -> BP.Problem {scope = bs, constraint}) basicSets
+    map (\bs -> BP.mkProblem (BP.Problem_ {scope = bs, constraint})) basicSets
     where
       basicSets = [BasicIntSet l m, BasicIntSet (m + 1) u]
         where
@@ -76,13 +82,18 @@ pruneBasicSet constraint@(IntEq n) scope@(BasicIntSet l u)
       BP.pavingInner scope (intSetN n)
   | l <= n && n <= u =
       -- deliberately sub-optimal pruning
-      BP.pavingOuterUndecided scope (intSetLU l (n - 1)) [BP.Problem {scope = BasicIntSet n u, constraint}]
+      BP.pavingOuterUndecided
+        scope
+        (intSetLU l (n - 1))
+        [BP.mkProblem $ BP.Problem_ {scope = BasicIntSet n u, constraint}]
   | l == u =
       BP.pavingOuter scope (intSetLU l u)
   | otherwise -- n < l < u || l < u < n
     =
       -- no pruning but simplifying the constraint
-      BP.pavingUndecided scope [BP.Problem {scope = BasicIntSet l u, constraint = IntFalse}]
+      BP.pavingUndecided
+        scope
+        [BP.mkProblem $ BP.Problem_ {scope = BasicIntSet l u, constraint = IntFalse}]
 pruneBasicSet IntTrue scope@(BasicIntSet l u) = BP.pavingInner scope (intSetLU l u)
 pruneBasicSet IntFalse scope@(BasicIntSet l u) = BP.pavingOuter scope (intSetLU l u)
 

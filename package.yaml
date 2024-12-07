@@ -23,6 +23,7 @@ dependencies:
 - base >= 4.7 && < 5
 # - row-types
 - containers
+- hashable
 - monad-logger
 - bytestring
 - text

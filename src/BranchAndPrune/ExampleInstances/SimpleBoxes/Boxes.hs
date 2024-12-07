@@ -13,6 +13,8 @@ import AERN2.MP (MPBall)
 import AERN2.MP qualified as MP
 import AERN2.MP.Ball (CentreRadius (CentreRadius))
 import AERN2.MP.Dyadic (dyadic)
+import AERN2.MP.Affine.Type () -- has instance Hashable MPBall (TODO: move that instance)
+
 import BranchAndPrune.BranchAndPrune qualified as BP
 import BranchAndPrune.ExampleInstances.RealConstraints (Var)
 import BranchAndPrune.Sets (Subset)
@@ -23,10 +25,15 @@ import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import Prelude qualified as P
+import Data.Hashable (Hashable)
+import GHC.Generics (Generic)
 
 {- N-dimensional Boxes -}
 
 data Box = Box {varDomains :: Map.Map Var MP.MPBall, splitOrder :: [Var]}
+  deriving (Generic)
+
+instance Hashable Box
 
 instance Show Box where
   show (Box {..}) =
@@ -70,7 +77,7 @@ boxAreaD (Box {..}) = product (map (double . dyadic . MP.radius) (Map.elems varD
 data Boxes
   = Boxes [Box]
   | BoxesUnion [Boxes]
-  deriving (P.Eq, Show)
+  deriving (P.Eq, Show, Generic)
 
 boxesCount :: Boxes -> Integer
 boxesCount (Boxes boxes) = length boxes
