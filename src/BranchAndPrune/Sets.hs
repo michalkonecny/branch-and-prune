@@ -1,22 +1,31 @@
 module BranchAndPrune.Sets
   ( ShowStats (..),
     IsSet (..),
-    CanSplitProblem (..),
+    BasicSetsToSet(..),
+    Subset(..),
     Problem (..),
+    CanSplitProblem (..),
   )
 where
 
+import Data.Aeson qualified as A
 import GHC.Generics (Generic)
 
-import Data.Aeson qualified as A
-
-class ShowStats t where
-  showStats :: t -> String
-
-class (ShowStats set) => IsSet set where
+class IsSet set where
   emptySet :: set
   setIsEmpty :: set -> Bool
   setUnion :: set -> set -> set
+
+class BasicSetsToSet basicSet set where
+  basicSetsToSet :: [basicSet] -> set
+
+data Subset subset superset = Subset
+  { subset :: subset,
+    superset :: superset
+  }
+
+class ShowStats t where
+  showStats :: t -> String
 
 data Problem constraint basicSet = Problem
   { scope :: basicSet,
@@ -29,4 +38,3 @@ instance (A.ToJSON basicSet, A.ToJSON constraint) => A.ToJSON (Problem constrain
 
 class CanSplitProblem constraint basicSet where
   splitProblem :: Problem constraint basicSet -> [Problem constraint basicSet] -- at least two so that B&P makes progress
-

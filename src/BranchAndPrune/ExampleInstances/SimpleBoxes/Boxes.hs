@@ -15,6 +15,7 @@ import AERN2.MP.Ball (CentreRadius (CentreRadius))
 import AERN2.MP.Dyadic (dyadic)
 import BranchAndPrune.BranchAndPrune qualified as BP
 import BranchAndPrune.ExampleInstances.RealConstraints (Var)
+import BranchAndPrune.Sets (Subset)
 import Data.List (sortOn)
 import Data.List qualified as List
 import Data.Map qualified as Map
@@ -79,12 +80,17 @@ boxesAreaD :: Boxes -> Double
 boxesAreaD (Boxes boxes) = sum (map boxAreaD boxes)
 boxesAreaD (BoxesUnion union) = sum (map boxesAreaD union)
 
-instance BP.ShowStats Boxes where
-  showStats bs =
-    printf "{|boxes| = %d, area = %3.2f}" (boxesCount bs) (boxesAreaD bs)
+instance BP.ShowStats (Subset Boxes Box) where
+  showStats (BP.Subset {..}) =
+    printf "{|boxes| = %d, coverage = %3.4f%%}" (boxesCount subset) coveragePercent
+    where
+      coveragePercent = 100 * (boxesAreaD subset / boxAreaD superset)
 
 instance BP.IsSet Boxes where
   emptySet = Boxes []
   setIsEmpty (Boxes boxes) = null boxes
   setIsEmpty (BoxesUnion union) = List.all BP.setIsEmpty union
   setUnion bs1 bs2 = BoxesUnion [bs1, bs2]
+
+instance BP.BasicSetsToSet Box Boxes where
+  basicSetsToSet = Boxes

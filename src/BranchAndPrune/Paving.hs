@@ -21,7 +21,8 @@ import GHC.Generics
 import Text.Printf (printf)
 
 data Paving constraint basicSet set = Paving
-  { inner :: set,
+  { scope :: basicSet,
+    inner :: set,
     undecided :: [Problem constraint basicSet],
     outer :: set
   }
@@ -33,19 +34,26 @@ instance (A.ToJSON set, A.ToJSON basicSet, A.ToJSON constraint) => A.ToJSON (Pav
 class CanPrune m constraint basicSet set where
   pruneProblemM :: Problem constraint basicSet -> m (Paving constraint basicSet set)
 
-showPavingSummary :: (IsSet set) => Paving constraint basicSet set -> String
+showPavingSummary ::
+  ( ShowStats (Subset set basicSet),
+    BasicSetsToSet basicSet set
+  ) =>
+  Paving constraint basicSet set ->
+  String
 showPavingSummary (Paving {..}) =
-  printf "{inner: %s, undecided: %s, outer: %s}" (showStats inner) statsUndecided (showStats outer)
-    where
-      statsUndecided = printf "|problems to do| = %d" (length undecided) :: String
+  printf "{inner: %s, undecided: %s, outer: %s}" (showSt inner) (showSt undecidedSet) (showSt outer)
+  where
+    showSt set = showStats (Subset set scope)
+    undecidedSet = basicSetsToSet $ map (\p -> p.scope) undecided
 
 -- printf "{inner: ??, undecided: %s, outer: %s}" (setShowStats undecided) (setShowStats outer)
 -- disabling printing of "inner" to avoid inconsistent slow-down when running with 1 thread
 
-emptyPaving :: (IsSet set) => Paving constraint basicSet set
-emptyPaving =
+emptyPaving :: (IsSet set) => basicSet -> Paving constraint basicSet set
+emptyPaving scope =
   Paving
-    { inner = emptySet,
+    { scope,
+      inner = emptySet,
       undecided = [],
       outer = emptySet
     }
@@ -73,20 +81,20 @@ pavingAddDecided paving1 paving2 =
       outer = paving1.outer `setUnion` paving2.outer
     }
 
-pavingInner :: (IsSet set) => set -> Paving constraint basicSet set
-pavingInner inner = Paving {inner, undecided = [], outer = emptySet}
+pavingInner :: (IsSet set) => basicSet -> set -> Paving constraint basicSet set
+pavingInner scope inner = Paving {scope, inner, undecided = [], outer = emptySet}
 
-pavingOuter :: (IsSet set) => set -> Paving constraint basicSet set
-pavingOuter outer = Paving {inner = emptySet, undecided = [], outer}
+pavingOuter :: (IsSet set) => basicSet -> set -> Paving constraint basicSet set
+pavingOuter scope outer = Paving {scope, inner = emptySet, undecided = [], outer}
 
-pavingUndecided :: (IsSet set) => [Problem constraint basicSet] -> Paving constraint basicSet set
-pavingUndecided undecided = Paving {undecided, inner = emptySet, outer = emptySet}
+pavingUndecided :: (IsSet set) => basicSet -> [Problem constraint basicSet] -> Paving constraint basicSet set
+pavingUndecided scope undecided = Paving {scope, undecided, inner = emptySet, outer = emptySet}
 
-pavingInnerOuter :: set -> set -> Paving constraint basicSet set
-pavingInnerOuter inner outer = Paving {inner, undecided = [], outer}
+pavingInnerOuter :: basicSet -> set -> set -> Paving constraint basicSet set
+pavingInnerOuter scope inner outer = Paving {scope, inner, undecided = [], outer}
 
-pavingInnerUndecided :: (IsSet set) => set -> [Problem constraint basicSet] -> Paving constraint basicSet set
-pavingInnerUndecided inner undecided = Paving {inner, undecided, outer = emptySet}
+pavingInnerUndecided :: (IsSet set) => basicSet -> set -> [Problem constraint basicSet] -> Paving constraint basicSet set
+pavingInnerUndecided scope inner undecided = Paving {scope, inner, undecided, outer = emptySet}
 
-pavingOuterUndecided :: (IsSet set) => set -> [Problem constraint basicSet] -> Paving constraint basicSet set
-pavingOuterUndecided outer undecided = Paving {inner = emptySet, undecided, outer}
+pavingOuterUndecided :: (IsSet set) => basicSet -> set -> [Problem constraint basicSet] -> Paving constraint basicSet set
+pavingOuterUndecided scope outer undecided = Paving {scope, inner = emptySet, undecided, outer}

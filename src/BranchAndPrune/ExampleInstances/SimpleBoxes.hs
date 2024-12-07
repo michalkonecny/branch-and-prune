@@ -89,9 +89,9 @@ instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m (FormB r) Box 
     where
       cP = simplifyOnBox scope constraint
       pavingP = case cP of
-        FormTrue -> BP.pavingInner (Boxes [scope])
-        FormFalse -> BP.pavingOuter (Boxes [scope])
-        _ -> BP.pavingUndecided [problem]
+        FormTrue -> BP.pavingInner scope (Boxes [scope])
+        FormFalse -> BP.pavingOuter scope (Boxes [scope])
+        _ -> BP.pavingUndecided scope [problem]
 
 simplifyOnBox :: (HasKleenanComparison r) => Box -> FormB r -> FormB r
 simplifyOnBox box = simplify

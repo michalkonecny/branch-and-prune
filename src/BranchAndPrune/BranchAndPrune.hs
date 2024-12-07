@@ -107,7 +107,7 @@ branchAndPruneM logConfig (Params {problem = initialProblem, ..} :: Params m bas
 
       -- start the recursive and parallel paving process with initial problem in the queue
       let initQueue = singletonQueue initialProblem
-      result <- steps 0 emptyPaving initQueue
+      result <- steps 0 (emptyPaving initialProblem.scope) initQueue
 
       logDebugStrR "B&P process finishing"
       logStepR $ DoneStep
@@ -184,8 +184,8 @@ branchAndPruneM logConfig (Params {problem = initialProblem, ..} :: Params m bas
                                 do
                                   -- yes, fork the queue between two new threads
                                   logDebugStrT "Forking queue into two queues to process independently"
-                                  let compL = \threadNumberL -> steps threadNumberL emptyPaving queueL
-                                  let compR = \threadNumberR -> steps threadNumberR emptyPaving queueR
+                                  let compL = \threadNumberL -> steps threadNumberL (emptyPaving pavingSoFar.scope) queueL
+                                  let compR = \threadNumberR -> steps threadNumberR (emptyPaving pavingSoFar.scope) queueR
 
                                   -- This is what the forkAndMerge does, but in parallel:
                                   --    resultL <- compL

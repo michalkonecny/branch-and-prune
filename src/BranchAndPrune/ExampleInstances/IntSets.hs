@@ -71,20 +71,20 @@ instance (Applicative m) => BP.CanPrune m IntConstraint BasicIntSet IntSet where
   pruneProblemM (BP.Problem {scope, constraint}) = pure $ pruneBasicSet constraint scope
 
 pruneBasicSet :: IntConstraint -> BasicIntSet -> BP.Paving IntConstraint BasicIntSet IntSet
-pruneBasicSet constraint@(IntEq n) (BasicIntSet l u)
+pruneBasicSet constraint@(IntEq n) scope@(BasicIntSet l u)
   | l == n && n == u =
-      BP.pavingInner (intSetN n)
+      BP.pavingInner scope (intSetN n)
   | l <= n && n <= u =
       -- deliberately sub-optimal pruning
-      BP.pavingOuterUndecided (intSetLU l (n - 1)) [BP.Problem {scope = BasicIntSet n u, constraint}]
+      BP.pavingOuterUndecided scope (intSetLU l (n - 1)) [BP.Problem {scope = BasicIntSet n u, constraint}]
   | l == u =
-      BP.pavingOuter (intSetLU l u)
+      BP.pavingOuter scope (intSetLU l u)
   | otherwise -- n < l < u || l < u < n
     =
       -- no pruning but simplifying the constraint
-      BP.pavingUndecided [BP.Problem {scope = BasicIntSet l u, constraint = IntFalse}]
-pruneBasicSet IntTrue (BasicIntSet l u) = BP.pavingInner (intSetLU l u)
-pruneBasicSet IntFalse (BasicIntSet l u) = BP.pavingOuter (intSetLU l u)
+      BP.pavingUndecided scope [BP.Problem {scope = BasicIntSet l u, constraint = IntFalse}]
+pruneBasicSet IntTrue scope@(BasicIntSet l u) = BP.pavingInner scope (intSetLU l u)
+pruneBasicSet IntFalse scope@(BasicIntSet l u) = BP.pavingOuter scope (intSetLU l u)
 
 newtype IntSetStack elem = IntSetStack [elem]
 
