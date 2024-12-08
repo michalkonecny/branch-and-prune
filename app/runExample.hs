@@ -5,7 +5,7 @@ module Main (main) where
 import AERN2.MP (Kleenean, MPBall, mpBallP)
 import AERN2.MP qualified as MP
 import AERN2.MP.Affine (MPAffine (MPAffine), MPAffineConfig (..))
-import BranchAndPrune.BranchAndPrune (Result (Result), showPavingSummary, Problem_ (..), mkProblem)
+import BranchAndPrune.BranchAndPrune (Problem_ (..), Result (Result), mkProblem, showPavingSummary)
 import BranchAndPrune.ExampleInstances.RealConstraintEval.AffArith ()
 import BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall ()
 import BranchAndPrune.ExampleInstances.RealConstraints
@@ -15,23 +15,24 @@ import BranchAndPrune.ExampleInstances.RealConstraints
     formImpl,
   )
 import BranchAndPrune.ExampleInstances.SimpleBoxes
-  ( Box (..),
-    BoxProblem,
+  ( BPLogConfig (..),
+    Box (..),
     BoxBPParams (..),
+    BoxProblem,
     ExprB,
-    BPLogConfig (..),
     boxBranchAndPrune,
     mkBox,
   )
+-- import GHC.Records
+
+import BranchAndPrune.Logging (defaultBPLogConfig)
 import Control.Monad.IO.Unlift (MonadIO (liftIO), MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runStdoutLoggingT)
 import Data.List qualified as List
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
--- import GHC.Records
 import MixedTypesNumPrelude
 import System.Environment (getArgs)
-import BranchAndPrune.Logging (defaultBPLogConfig)
 
 -- import qualified Prelude as P
 
@@ -53,61 +54,67 @@ problems :: (ProblemR r) => r -> Rational -> Map.Map String (BoxProblem r)
 problems (sampleR :: r) eps =
   Map.fromList
     [ ( "transitivityEps",
-        mkProblem $ Problem_
-          { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))],
-            constraint = (((x + eps) <= y) && (y <= z)) `formImpl` (x <= z)
-          }
+        mkProblem
+          $ Problem_
+            { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))],
+              constraint = (((x + eps) <= y) && (y <= z)) `formImpl` (x <= z)
+            }
       ),
       ( "circleEps",
-        mkProblem $ Problem_
-          { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
-            constraint = (x * x - 2.0 * x * y + y * y <= 1.0) `formImpl` (x - y <= 1.0 + eps)
-          }
+        mkProblem
+          $ Problem_
+            { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
+              constraint = (x * x - 2.0 * x * y + y * y <= 1.0) `formImpl` (x - y <= 1.0 + eps)
+            }
       ),
       ( "circleEpsSqrt",
-        mkProblem $ Problem_
-          { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
-            constraint = ((sqrt $ x * x - 2.0 * x * y + y * y) <= 1.0) `formImpl` (x - y <= 1.0 + eps)
-          }
+        mkProblem
+          $ Problem_
+            { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
+              constraint = ((sqrt $ x * x - 2.0 * x * y + y * y) <= 1.0) `formImpl` (x - y <= 1.0 + eps)
+            }
       ),
       ( "quadraticReduction",
-        mkProblem $ Problem_
-          { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
-            constraint = 2.0 * x * x - 4.0 * x + 2.0 + y <= (-4.0) * (x - 1.0) + y
-          }
+        mkProblem
+          $ Problem_
+            { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
+              constraint = 2.0 * x * x - 4.0 * x + 2.0 + y <= (-4.0) * (x - 1.0) + y
+            }
       ),
       ( "cubicReduction",
-        mkProblem $ Problem_
-          { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
-            constraint = 6.0 * x * x * x + x * x - 10.0 * x + 3.0 + y <= (x - 1.0) * (x - 4.5) + y + eps
-          }
+        mkProblem
+          $ Problem_
+            { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
+              constraint = 6.0 * x * x * x + x * x - 10.0 * x + 3.0 + y <= (x - 1.0) * (x - 4.5) + y + eps
+            }
       ),
       ( "vcApproxSinLE",
-        mkProblem $ Problem_
-          { scope = mkBox [("r1", (-3819831 / 4194304, 7639661 / 8388608)), ("x", (-6851933 / 8388608, 6851933 / 8388608))],
-            constraint =
-              let t =
-                    ( ( x
-                          * ( ( ( ( ((-3350387 / 17179869184) * (x * x))
-                                      + (4473217 / 536870912)
+        mkProblem
+          $ Problem_
+            { scope = mkBox [("r1", (-3819831 / 4194304, 7639661 / 8388608)), ("x", (-6851933 / 8388608, 6851933 / 8388608))],
+              constraint =
+                let t =
+                      ( ( x
+                            * ( ( ( ( ((-3350387 / 17179869184) * (x * x))
+                                        + (4473217 / 536870912)
+                                    )
+                                      * (x * x)
                                   )
-                                    * (x * x)
+                                    + (-349525 / 2097152)
                                 )
-                                  + (-349525 / 2097152)
+                                  * (x * x)
                               )
-                                * (x * x)
-                            )
+                        )
+                          + x
                       )
-                        + x
+                 in ( if x <= 1 / 67108864 && -x <= 1 / 67108864
+                        then r1 == x
+                        else
+                          (r1 <= t + (4498891 / 100000000000000))
+                            && ((t - (4498891 / 100000000000000)) <= r1)
                     )
-               in ( if x <= 1 / 67108864 && -x <= 1 / 67108864
-                      then r1 == x
-                      else
-                        (r1 <= t + (4498891 / 100000000000000))
-                          && ((t - (4498891 / 100000000000000)) <= r1)
-                  )
-                    && (not ((r1 + (-1.0 * (sin x))) <= (58 * (1 / 1000000000)) + eps))
-          }
+                      && (not ((r1 + (-1.0 * (sin x))) <= (58 * (1 / 1000000000)) + eps))
+            }
       )
     ]
   where
@@ -134,8 +141,9 @@ processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, logConfigS] =
     giveUpAccuracy = toRational (read giveUpAccuracyS :: Double)
     maxThreads = read maxThreadsS :: Int
     logConfig = case logConfigS of
-      "debug" -> defaultBPLogConfig { shouldLogDebugMessages = True }
-      "logsteps" -> defaultBPLogConfig { stepsFile = Just "steps.json" }
+      "debug" -> defaultBPLogConfig {shouldLogDebugMessages = True}
+      "file" -> defaultBPLogConfig {stepsFile = Just "steps.json"}
+      "redis" -> defaultBPLogConfig {stepsRedisKey = Just "steps_json"}
       _ -> defaultBPLogConfig
 processArgs _ _ =
   error

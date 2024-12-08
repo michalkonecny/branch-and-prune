@@ -8,20 +8,20 @@ import BranchAndPrune.Steps (Step (..))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (MonadLogger, logDebugN)
 import Data.Aeson qualified as A
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString qualified as BSS
+import Data.ByteString.Lazy qualified as BSL
 import Data.Text qualified as T
-import Data.Text.Lazy qualified as TL
-import Data.Text.Lazy.Encoding qualified as TLE
+import Data.Text.Encoding qualified as TE
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
+import Database.Redis (runRedis)
+import Database.Redis qualified as Redis
 import System.IO (Handle, IOMode (WriteMode), hClose, hPutStrLn, openFile)
-
--- import Database.Redis qualified as Redis
 
 data BPLogConfig = BPLogConfig
   { shouldLogDebugMessages :: Bool,
     stepsFile :: Maybe FilePath,
-    stepsRedisStream :: Maybe String
+    stepsRedisKey :: Maybe String
   }
   deriving (Eq)
 
@@ -30,12 +30,17 @@ defaultBPLogConfig =
   BPLogConfig
     { shouldLogDebugMessages = False,
       stepsFile = Nothing,
-      stepsRedisStream = Nothing
+      stepsRedisKey = Nothing
     }
 
 data BPLogResources = LogResources
-  { stepsFileHandle :: Maybe Handle
-  -- redisConnection ::
+  { stepsFileHandle :: Maybe Handle,
+    redisDesination :: Maybe RedisDestination
+  }
+
+data RedisDestination = RedisDestination
+  { connection :: Redis.Connection,
+    queueKey :: BSS.ByteString
   }
 
 getLoggingFunctions ::
@@ -52,6 +57,15 @@ getLoggingFunctions logConfig =
           hPutStrLn handle "["
           pure $ Just handle
         Nothing -> pure Nothing
+      redisDesination <- case logConfig.stepsRedisKey of
+        Just queueKeyS -> liftIO $ do
+          let queueKey = stringToBSS queueKeyS -- encode String to ByteString
+          connection <- Redis.checkedConnect Redis.defaultConnectInfo
+          liftIO $ runRedis connection $ do
+            _ <- Redis.del [queueKey]
+            pure ()
+          pure $ Just $ RedisDestination {..}
+        Nothing -> pure Nothing
       pure $ LogResources {..}
 
     finaliseLogging resources = do
@@ -60,12 +74,22 @@ getLoggingFunctions logConfig =
           hPutStrLn handle "]"
           hClose handle
         _ -> pure ()
+      case resources.redisDesination of
+        Just (RedisDestination {..}) -> liftIO $ do
+          Redis.disconnect connection
+        _ -> pure ()
 
     logStep resources step = do
-      let stepLine = (commaIfNotInit step) <> (bsToString $ A.encode step)
+      let stepJSONBSS = BSL.toStrict $ A.encode step
+      let stepLine = (commaIfNotInit step) <> (bssToString stepJSONBSS)
       case resources.stepsFileHandle of
         Just handle -> liftIO $ hPutStrLn handle stepLine
         Nothing -> pure ()
+      case resources.redisDesination of
+        Just (RedisDestination {..}) -> liftIO $ runRedis connection $ do
+          _ <- Redis.rpush queueKey [stepJSONBSS]
+          pure ()
+        _ -> pure ()
 
     -- This wrapper supports the use of "printf" to format log messages.
     -- It prepends the current time to the message.
@@ -83,8 +107,11 @@ commaIfNotInit :: Step problem paving -> String
 commaIfNotInit (InitStep _) = ""
 commaIfNotInit _ = ","
 
-bsToString :: ByteString -> String
-bsToString bs =
-  case TLE.decodeUtf8' bs of
+bssToString :: BSS.ByteString -> String
+bssToString bs =
+  case TE.decodeUtf8' bs of
     Left err -> "Failed to decode UTF8: " ++ (show err)
-    Right stepT -> TL.unpack stepT
+    Right stepT -> T.unpack stepT
+
+stringToBSS :: String -> BSS.ByteString
+stringToBSS = TE.encodeUtf8 . T.pack
