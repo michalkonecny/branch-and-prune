@@ -177,6 +177,7 @@ shouldGiveUpOnBoxProblem giveUpAccuracy (BP.Problem {scope = Box {..}}) =
 
 boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) => BoxBPParams r -> m (BP.Result (FormB r) Box Boxes)
 boxBranchAndPrune (BoxBPParams {..} :: BoxBPParams r) = do
+  -- conn <- liftIO $ Redis.checkedConnect Redis.defaultConnectInfo
   BP.branchAndPruneM
     (getLoggingFunctions logConfig)
     ( BP.Params
