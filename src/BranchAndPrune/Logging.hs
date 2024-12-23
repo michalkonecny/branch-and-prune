@@ -1,5 +1,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 
 module BranchAndPrune.Logging (BPLogConfig (..), defaultBPLogConfig, getLoggingFunctions) where
 
@@ -40,7 +41,7 @@ data BPLogResources = LogResources
 
 data RedisDestination = RedisDestination
   { connection :: Redis.Connection,
-    queueKey :: BSS.ByteString
+    streamKey :: BSS.ByteString
   }
 
 getLoggingFunctions ::
@@ -58,11 +59,11 @@ getLoggingFunctions logConfig =
           pure $ Just handle
         Nothing -> pure Nothing
       redisDesination <- case logConfig.stepsRedisKey of
-        Just queueKeyS -> liftIO $ do
-          let queueKey = stringToBSS queueKeyS -- encode String to ByteString
+        Just streamKeyS -> liftIO $ do
+          let streamKey = stringToBSS streamKeyS -- encode String to ByteString
           connection <- Redis.checkedConnect Redis.defaultConnectInfo
           liftIO $ runRedis connection $ do
-            _ <- Redis.del [queueKey]
+            _ <- Redis.del [streamKey]
             pure ()
           pure $ Just $ RedisDestination {..}
         Nothing -> pure Nothing
@@ -87,7 +88,7 @@ getLoggingFunctions logConfig =
         Nothing -> pure ()
       case resources.redisDesination of
         Just (RedisDestination {..}) -> liftIO $ runRedis connection $ do
-          _ <- Redis.rpush queueKey [stepJSONBSS]
+          _ <- redisAddStep streamKey stepJSONBSS
           pure ()
         _ -> pure ()
 
@@ -106,6 +107,10 @@ getLoggingFunctions logConfig =
 commaIfNotInit :: Step problem paving -> String
 commaIfNotInit (InitStep _) = ""
 commaIfNotInit _ = ","
+
+redisAddStep :: _ => BSS.ByteString -> BSS.ByteString -> _
+redisAddStep streamKey stepJSONBSS =
+  Redis.xadd streamKey (stringToBSS "*") [(stringToBSS "step", stepJSONBSS)]
 
 bssToString :: BSS.ByteString -> String
 bssToString bs =
