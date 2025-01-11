@@ -13,15 +13,15 @@ data Step problem paving
       { problem :: problem
       }
   | PruneStep
-      { problemHash :: Int,
+      { problemHash :: String,
         prunePaving :: paving
       }
   | SplitStep
-      { problemHash :: Int,
+      { problemHash :: String,
         pieces :: [problem]
       }
   | GiveUpOnProblemStep
-      { problemHash :: Int
+      { problemHash :: String
       }
   | AbortStep
       { detail :: String
@@ -30,4 +30,4 @@ data Step problem paving
   deriving (Show, Generic)
 
 instance (A.ToJSON problem, A.ToJSON paving) => A.ToJSON (Step problem paving) where
-  toEncoding = A.genericToEncoding A.defaultOptions
+  toEncoding = A.genericToEncoding (A.defaultOptions)

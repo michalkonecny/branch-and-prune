@@ -34,12 +34,12 @@ class ShowStats t where
 --
 -- Construct using
 -- @
--- mkProblem (Problem_ { scope = ..., constraint = ..., contentHash = 0 })
+-- mkProblem (Problem_ { scope = ..., constraint = ... })
 -- @
 data Problem constraint basicSet = Problem
   { scope :: basicSet,
     constraint :: constraint,
-    contentHash :: Int
+    contentHash :: String
   }
   deriving (Show, Generic)
 
@@ -54,7 +54,7 @@ mkProblem ::
   Problem_ constraint basicSet ->
   Problem constraint basicSet
 mkProblem (Problem_ {scope, constraint}) =
-  Problem {contentHash = hash (scope, constraint), ..}
+  Problem {contentHash = show $ hash (scope, constraint), ..}
 
 instance (A.ToJSON basicSet, A.ToJSON constraint) => A.ToJSON (Problem constraint basicSet) where
   toEncoding = A.genericToEncoding A.defaultOptions
