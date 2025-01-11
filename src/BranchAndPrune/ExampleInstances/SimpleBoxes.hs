@@ -24,7 +24,6 @@ where
 import AERN2.MP (Kleenean (..), MPBall)
 import AERN2.MP qualified as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
-
 import BranchAndPrune.BranchAndPrune (CanSplitProblem (splitProblem))
 import BranchAndPrune.BranchAndPrune qualified as BP
 import BranchAndPrune.ExampleInstances.RealConstraints
@@ -84,13 +83,13 @@ type HasKleenanComparison r =
   )
 
 instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m (FormB r) Box Boxes where
-  pruneProblemM problem@(BP.Problem {scope, constraint}) = pure pavingP
+  pruneProblemM (BP.Problem {scope, constraint}) = pure pavingP
     where
       cP = simplifyOnBox scope constraint
       pavingP = case cP of
         FormTrue -> BP.pavingInner scope (Boxes [scope])
         FormFalse -> BP.pavingOuter scope (Boxes [scope])
-        _ -> BP.pavingUndecided scope [problem]
+        _ -> BP.pavingUndecided scope [BP.mkProblem $ BP.Problem_ {scope, constraint = cP}]
 
 simplifyOnBox :: (HasKleenanComparison r) => Box -> FormB r -> FormB r
 simplifyOnBox box = simplify
