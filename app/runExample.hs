@@ -60,13 +60,6 @@ problems (sampleR :: r) eps =
               constraint = (((x + eps) <= y) && (y <= z)) `formImpl` (x <= z)
             }
       ),
-      ( "circleEps",
-        mkProblem
-          $ Problem_
-            { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
-              constraint = (x * x - 2.0 * x * y + y * y <= 1.0) `formImpl` (x - y <= 1.0 + eps)
-            }
-      ),
       ( "simpleAnd",
         mkProblem
           $ Problem_
@@ -74,11 +67,18 @@ problems (sampleR :: r) eps =
               constraint = (y <= 1 + eps) && (1 - eps <= y)
             }
       ),
+      ( "circleEps",
+        mkProblem
+          $ Problem_
+            { scope = mkBox [("x", (0.0, 1.0)), ("y", (0.0, 1.0))],
+              constraint = (x * x + y * y <= 1.0) `formImpl` (x * x + y * y <= 1.0 + eps)
+            }
+      ),
       ( "circleEpsSqrt",
         mkProblem
           $ Problem_
-            { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0))],
-              constraint = ((sqrt $ x * x - 2.0 * x * y + y * y) <= 1.0) `formImpl` (x - y <= 1.0 + eps)
+            { scope = mkBox [("x", (0.0, 1.0)), ("y", (0.0, 1.0))],
+              constraint = (sqrt (x * x + y * y) <= 1.0) `formImpl` (sqrt (x * x + y * y) <= 1.0 + eps)
             }
       ),
       ( "quadraticReduction",
