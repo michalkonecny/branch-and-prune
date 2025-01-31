@@ -16,12 +16,12 @@ module BranchAndPrune.ExampleInstances.RealConstraints
   )
 where
 
+import Data.Hashable (Hashable (hashWithSalt))
 import Data.Set as Set
+import GHC.Generics (Generic)
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import Prelude qualified as P
-import Data.Hashable (Hashable (hashWithSalt))
-import GHC.Generics (Generic)
 
 type Var = String
 
@@ -31,8 +31,28 @@ data Expr b r = Expr
   { eval :: b -> r,
     vars :: Set.Set Var,
     sampleR :: r,
-    description :: String
+    description :: String,
+    descriptionBindingLevel :: Int
+    {-
+      The binding level of the expression's root operators.
+      Operands of operators need to have lower level than the operator.
+      Adding brackets to achieve this.
+
+      Operator levels:
+        var, (...), f(...): 0
+        *: 1
+        /: 1
+        unary/binary -,+: 2
+        <=: 3
+        /\,\/: 4
+        ==>: 5
+    -}
   }
+
+wrapDescription :: (Expr b r) -> Int -> String
+wrapDescription (Expr {..}) level
+  | descriptionBindingLevel < level = description
+  | otherwise = "(" <> description <> ")"
 
 class CanGetVarDomain b r where
   getVarDomain :: r -> b -> Var -> r
@@ -43,14 +63,22 @@ exprVar sampleR var =
     { eval = \b -> getVarDomain sampleR b var,
       vars = Set.singleton var,
       sampleR,
-      description = var
+      description = var,
+      descriptionBindingLevel = 0
     }
 
 class CanGetLiteral b r where
   getLiteral :: r -> b -> Rational -> r
 
 exprLit :: (CanGetLiteral b r) => r -> Rational -> Expr b r
-exprLit sampleR literal = Expr {eval, vars = Set.empty, sampleR, description = show (double literal)}
+exprLit sampleR literal =
+  Expr
+    { eval,
+      vars = Set.empty,
+      sampleR,
+      description = show (double literal),
+      descriptionBindingLevel = if literal < (0 :: Integer) then 2 else 0
+    }
   where
     eval scope = getLiteral sampleR scope literal
 
@@ -65,19 +93,35 @@ instance Hashable (Expr b r) where
 
 exprNeg :: (CanNegSameType r) => Expr b r -> Expr b r
 exprNeg e =
-  e {eval = negate . e.eval, description = printf "-(%s)" e.description}
+  e
+    { eval = negate . e.eval,
+      description = printf "-%s" (wrapDescription e 2),
+      descriptionBindingLevel = 2
+    }
 
 exprSqrt :: (CanSqrtSameType r) => Expr b r -> Expr b r
 exprSqrt e =
-  e {eval = sqrt . e.eval, description = printf "sqrt(%s)" e.description}
+  e
+    { eval = sqrt . e.eval,
+      description = printf "sqrt(%s)" e.description,
+      descriptionBindingLevel = 0
+    }
 
 exprSin :: (CanSinCosSameType r) => Expr b r -> Expr b r
 exprSin e =
-  e {eval = sin . e.eval, description = printf "sin(%s)" e.description}
+  e
+    { eval = sin . e.eval,
+      description = printf "sin(%s)" e.description,
+      descriptionBindingLevel = 0
+    }
 
 exprCos :: (CanSinCosSameType r) => Expr b r -> Expr b r
 exprCos e =
-  e {eval = cos . e.eval, description = printf "cos(%s)" e.description}
+  e
+    { eval = cos . e.eval,
+      description = printf "cos(%s)" e.description,
+      descriptionBindingLevel = 0
+    }
 
 exprPlus :: (CanAddSameType r) => Expr b r -> Expr b r -> Expr b r
 exprPlus e1 e2 =
@@ -85,7 +129,8 @@ exprPlus e1 e2 =
     { eval = \b -> e1.eval b + e2.eval b,
       vars = e1.vars `Set.union` e2.vars,
       sampleR = e1.sampleR,
-      description = printf "(%s) + (%s)" e1.description e2.description
+      description = printf "%s + %s" (wrapDescription e1 2) (wrapDescription e2 2),
+      descriptionBindingLevel = 2
     }
 
 exprTimes :: (CanMulSameType r) => Expr b r -> Expr b r -> Expr b r
@@ -94,7 +139,8 @@ exprTimes e1 e2 =
     { eval = \b -> e1.eval b * e2.eval b,
       vars = e1.vars `Set.union` e2.vars,
       sampleR = e1.sampleR,
-      description = printf "(%s)*(%s)" e1.description e2.description
+      description = printf "%s⋅%s" (wrapDescription e1 1) (wrapDescription e2 1),
+      descriptionBindingLevel = 1
     }
 
 -- Instances to conveniently build expressions using the usual numerical operators
@@ -150,8 +196,8 @@ data BinaryComp = CompLeq | CompEq
 instance Hashable BinaryComp
 
 instance Show BinaryComp where
-  show CompLeq = "<="
-  show CompEq = "=="
+  show CompLeq = "≤"
+  show CompEq = "="
 
 data UnaryConn = ConnNeg
   deriving (P.Eq, Generic)
