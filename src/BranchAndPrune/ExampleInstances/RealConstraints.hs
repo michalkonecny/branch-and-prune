@@ -218,10 +218,10 @@ instance Show BinaryConn where
   show ConnImpl = "⇒"
 
 data Form expr
-  = FormComp BinaryComp expr expr
-  | FormUnary UnaryConn (Form expr)
-  | FormBinary BinaryConn (Form expr) (Form expr)
-  | FormIfThenElse (Form expr) (Form expr) (Form expr)
+  = FormComp {comp :: BinaryComp, e1 :: expr, e2 :: expr}
+  | FormUnary {uconn :: UnaryConn, f1 :: (Form expr)}
+  | FormBinary {bconn :: BinaryConn, f1 :: (Form expr), f2 :: (Form expr)}
+  | FormIfThenElse {fc :: (Form expr), ft :: (Form expr), ff :: (Form expr)}
   | FormTrue
   | FormFalse
   deriving (P.Eq, Generic)
