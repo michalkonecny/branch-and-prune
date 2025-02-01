@@ -12,7 +12,7 @@
 # resolver: nightly-2023-09-24
 # resolver: ghc-9.6.2
 
-resolver: lts-20.25
+resolver: lts-20.26
 
 #
 # The location of a snapshot can be provided as a file or url. Stack assumes
@@ -61,7 +61,7 @@ extra-deps:
 # extra-package-dbs: []
 
 # Control whether we use the GHC we find on the path
-# system-ghc: true
+system-ghc: true
 #
 # Require a specific version of Stack, using version ranges
 # require-stack-version: -any # Default

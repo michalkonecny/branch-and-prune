@@ -31,8 +31,13 @@ library
       BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall
       BranchAndPrune.ExampleInstances.RealConstraints
       BranchAndPrune.ExampleInstances.SimpleBoxes
+      BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
+      BranchAndPrune.ExampleInstances.SimpleBoxes.JSON
       BranchAndPrune.ForkUtils
+      BranchAndPrune.Logging
+      BranchAndPrune.Paving
       BranchAndPrune.Sets
+      BranchAndPrune.Steps
   other-modules:
       Paths_branch_and_prune
   autogen-modules:
@@ -49,8 +54,12 @@ library
   build-depends:
       aern2-affarith
     , aern2-mp
+    , aeson
     , base >=4.7 && <5
+    , bytestring
     , containers
+    , hashable
+    , hedis
     , mixed-types-num
     , monad-logger
     , stm
@@ -80,9 +89,13 @@ test-suite branch-and-prune-test
   build-depends:
       aern2-affarith
     , aern2-mp
+    , aeson
     , base >=4.7 && <5
     , branch-and-prune
+    , bytestring
     , containers
+    , hashable
+    , hedis
     , hspec
     , mixed-types-num
     , monad-logger

@@ -23,11 +23,15 @@ dependencies:
 - base >= 4.7 && < 5
 # - row-types
 - containers
+- hashable
 - monad-logger
+- bytestring
 - text
 - time
 - unliftio-core
 - stm
+- aeson
+- hedis
 - mixed-types-num
 - aern2-mp
 - aern2-affarith

@@ -16,55 +16,53 @@ module BranchAndPrune.ExampleInstances.IntSets
     BasicIntSet (..),
     IntConstraint (..),
     IntSetStack (..),
-    IntSetBPParams(..),
+    IntSetBPParams (..),
     intSetBranchAndPrune,
   )
 where
 
-import qualified BranchAndPrune.BranchAndPrune as BP
-import Control.Monad.Logger (MonadLogger)
-import qualified Data.Set as Set
+import BranchAndPrune.BranchAndPrune qualified as BP
+import BranchAndPrune.Logging
 import Control.Monad.IO.Unlift (MonadUnliftIO)
+import Control.Monad.Logger (MonadLogger)
+import Data.Aeson qualified as A
+import Data.Set qualified as Set
+import GHC.Generics
+import Data.Hashable (Hashable)
 
-newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show)
+newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show, Generic)
+
+instance A.ToJSON IntSet
+
+instance BP.ShowStats IntSet where
+  showStats (IntSet set) = show (Set.size set)
 
 instance BP.IsSet IntSet where
   emptySet = IntSet Set.empty
   setIsEmpty (IntSet set) = Set.null set
   setUnion (IntSet set1) (IntSet set2) = IntSet (Set.union set1 set2)
-  setShowStats (IntSet set) = show (Set.size set)
 
-data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int} deriving (Eq, Show)
+data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int}
+  deriving (Eq, Show, Generic)
 
-instance BP.SetFromBasic BasicIntSet IntSet where
-  fromBasicSets basicSets =
-    IntSet (Set.fromList (concatMap doOne basicSets))
-    where
-      doOne (BasicIntSet l u) = [l .. u]
+instance Hashable BasicIntSet
 
-instance BP.CanSplitSet BasicIntSet IntSet where
-  splitSet (IntSet nSet) =
-    splitIfOnlyOne basicSets
-    where
-      splitIfOnlyOne [BasicIntSet l u]
-        | l < u =
-            [BasicIntSet l m, BasicIntSet (m + 1) u]
-        where
-          m = (l + u) `div` 2
-      splitIfOnlyOne bs = bs
-      basicSets =
-        case nAscendingList of
-          [] -> []
-          (n : ns) -> lookForIntervals n n ns []
-        where
-          nAscendingList = Set.toAscList nSet
-          lookForIntervals l u [] prev = BasicIntSet l u : prev
-          lookForIntervals l u (n : ns) prev
-            | n == u + 1 = lookForIntervals l n ns prev
-            | otherwise = lookForIntervals n n ns (BasicIntSet l u : prev)
+instance A.ToJSON BasicIntSet
 
 data IntConstraint = IntEq Int | IntTrue | IntFalse -- \| IntNeq Int
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
+
+instance Hashable IntConstraint
+
+instance A.ToJSON IntConstraint
+
+instance BP.CanSplitProblem IntConstraint BasicIntSet where
+  splitProblem (BP.Problem {scope = BasicIntSet l u, constraint}) =
+    map (\bs -> BP.mkProblem (BP.Problem_ {scope = bs, constraint})) basicSets
+    where
+      basicSets = [BasicIntSet l m, BasicIntSet (m + 1) u]
+        where
+          m = (l + u) `div` 2
 
 intSet :: [Int] -> IntSet
 intSet ns = IntSet (Set.fromList ns)
@@ -75,26 +73,33 @@ intSetLU l u = IntSet (Set.fromList [l .. u])
 intSetN :: Int -> IntSet
 intSetN n = IntSet (Set.singleton n)
 
-instance (Applicative m) => BP.CanPrune m BasicIntSet IntConstraint IntSet where
-  pruneBasicSetM c b = pure $ pruneBasicSet c b
+instance (Applicative m) => BP.CanPrune m IntConstraint BasicIntSet IntSet where
+  pruneProblemM (BP.Problem {scope, constraint}) = pure $ pruneBasicSet constraint scope
 
-pruneBasicSet :: IntConstraint -> BasicIntSet -> (IntConstraint, BP.Paving IntSet)
-pruneBasicSet c@(IntEq n) (BasicIntSet l u)
+pruneBasicSet :: IntConstraint -> BasicIntSet -> BP.Paving IntConstraint BasicIntSet IntSet
+pruneBasicSet constraint@(IntEq n) scope@(BasicIntSet l u)
   | l == n && n == u =
-      (c, BP.pavingInner (intSetN n))
+      BP.pavingInner scope (intSetN n)
   | l <= n && n <= u =
-      (c, BP.pavingOuterUndecided (intSetLU l (n - 1)) (intSetLU n u)) -- deliberately sub-optimal pruning
+      -- deliberately sub-optimal pruning
+      BP.pavingOuterUndecided
+        scope
+        (intSetLU l (n - 1))
+        [BP.mkProblem $ BP.Problem_ {scope = BasicIntSet n u, constraint}]
   | l == u =
-      (c, BP.pavingOuter (intSetLU l u))
+      BP.pavingOuter scope (intSetLU l u)
   | otherwise -- n < l < u || l < u < n
     =
-      (IntFalse, BP.pavingUndecided (intSetLU l u)) -- no pruning but simplifying the constraint
-pruneBasicSet c@IntTrue (BasicIntSet l u) = (c, BP.pavingInner (intSetLU l u))
-pruneBasicSet c@IntFalse (BasicIntSet l u) = (c, BP.pavingOuter (intSetLU l u))
+      -- no pruning but simplifying the constraint
+      BP.pavingUndecided
+        scope
+        [BP.mkProblem $ BP.Problem_ {scope = BasicIntSet l u, constraint = IntFalse}]
+pruneBasicSet IntTrue scope@(BasicIntSet l u) = BP.pavingInner scope (intSetLU l u)
+pruneBasicSet IntFalse scope@(BasicIntSet l u) = BP.pavingOuter scope (intSetLU l u)
 
-newtype IntSetStack = IntSetStack [(BasicIntSet, IntConstraint)]
+newtype IntSetStack elem = IntSetStack [elem]
 
-instance BP.IsPriorityQueue IntSetStack (BasicIntSet, IntConstraint) where
+instance BP.IsPriorityQueue (IntSetStack elem) elem where
   singletonQueue e = IntSetStack [e]
   queueToList (IntSetStack list) = list
   queuePickNext (IntSetStack []) = Nothing
@@ -109,23 +114,21 @@ instance BP.IsPriorityQueue IntSetStack (BasicIntSet, IntConstraint) where
   queueMerge (IntSetStack stackL) (IntSetStack stackR) = IntSetStack $ stackL ++ stackR
 
 data IntSetBPParams = IntSetBPParams
-  { scope :: BasicIntSet,
-    constraint :: IntConstraint
+  { problem :: BP.Problem IntConstraint BasicIntSet
   }
 
-intSetBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => IntSetBPParams -> m (BP.Result IntSet IntSetStack)
+intSetBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => IntSetBPParams -> m (BP.Result IntConstraint BasicIntSet IntSet)
 intSetBranchAndPrune (IntSetBPParams {..}) =
   BP.branchAndPruneM
+    (getLoggingFunctions $ defaultBPLogConfig {shouldLogDebugMessages = True})
     ( BP.Params
-        { BP.scope,
-          BP.constraint,
-          BP.shouldAbort = const False :: BP.Paving IntSet -> Bool,
-          BP.shouldGiveUpOnBasicSet = const False :: BasicIntSet -> Bool,
+        { BP.problem,
+          BP.shouldAbort = const Nothing,
+          BP.shouldGiveUpSolvingProblem = const False,
           BP.dummyPriorityQueue,
-          BP.maxThreads = 2,
-          BP.dummyMaction = pure ()
+          BP.maxThreads = 2
         }
     )
   where
-    dummyPriorityQueue :: IntSetStack
-    dummyPriorityQueue = IntSetStack [(BasicIntSet 0 0, IntFalse)]
+    dummyPriorityQueue :: IntSetStack (BP.Problem IntConstraint BasicIntSet)
+    dummyPriorityQueue = IntSetStack [problem]

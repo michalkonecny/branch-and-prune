@@ -40,6 +40,7 @@ executable branch-and-prune-example
     , base >=4.7 && <5
     , branch-and-prune
     , containers
+    , hedis
     , mixed-types-num
     , monad-logger
     , stm

@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+
 module BranchAndPrune.ExampleInstances.RealConstraints
   ( Var,
     Expr (..),
@@ -15,16 +16,43 @@ module BranchAndPrune.ExampleInstances.RealConstraints
   )
 where
 
+import Data.Hashable (Hashable (hashWithSalt))
 import Data.Set as Set
+import GHC.Generics (Generic)
 import MixedTypesNumPrelude
 import Text.Printf (printf)
-import qualified Prelude as P
+import Prelude qualified as P
 
 type Var = String
 
 {- Non-linear Expressions -}
 
-data Expr b r = Expr {eval :: b -> r, vars :: Set.Set Var, sampleR :: r, description :: String}
+data Expr b r = Expr
+  { eval :: b -> r,
+    vars :: Set.Set Var,
+    sampleR :: r,
+    description :: String,
+    descriptionBindingLevel :: Int
+    {-
+      The binding level of the expression's root operators.
+      Operands of operators need to have lower level than the operator.
+      Adding brackets to achieve this.
+
+      Operator levels:
+        var, (...), f(...): 0
+        *: 1
+        /: 1
+        unary/binary -,+: 2
+        <=: 3
+        /\,\/: 4
+        ==>: 5
+    -}
+  }
+
+wrapDescription :: (Expr b r) -> Int -> String
+wrapDescription (Expr {..}) level
+  | descriptionBindingLevel < level = description
+  | otherwise = "(" <> description <> ")"
 
 class CanGetVarDomain b r where
   getVarDomain :: r -> b -> Var -> r
@@ -35,14 +63,22 @@ exprVar sampleR var =
     { eval = \b -> getVarDomain sampleR b var,
       vars = Set.singleton var,
       sampleR,
-      description = var
+      description = var,
+      descriptionBindingLevel = 0
     }
 
 class CanGetLiteral b r where
   getLiteral :: r -> b -> Rational -> r
 
 exprLit :: (CanGetLiteral b r) => r -> Rational -> Expr b r
-exprLit sampleR literal = Expr {eval, vars = Set.empty, sampleR, description = show (double literal)}
+exprLit sampleR literal =
+  Expr
+    { eval,
+      vars = Set.empty,
+      sampleR,
+      description = show (double literal),
+      descriptionBindingLevel = if literal < (0 :: Integer) then 2 else 0
+    }
   where
     eval scope = getLiteral sampleR scope literal
 
@@ -52,21 +88,40 @@ instance Show (Expr b r) where
 instance P.Eq (Expr b r) where
   expr1 == expr2 = expr1.description == expr2.description
 
+instance Hashable (Expr b r) where
+  hashWithSalt salt expr = hashWithSalt salt expr.description
+
 exprNeg :: (CanNegSameType r) => Expr b r -> Expr b r
 exprNeg e =
-  e {eval = negate . e.eval, description = printf "-(%b)" e.description}
+  e
+    { eval = negate . e.eval,
+      description = printf "-%s" (wrapDescription e 2),
+      descriptionBindingLevel = 2
+    }
 
 exprSqrt :: (CanSqrtSameType r) => Expr b r -> Expr b r
 exprSqrt e =
-  e {eval = sqrt . e.eval, description = printf "sqrt(%b)" e.description}
+  e
+    { eval = sqrt . e.eval,
+      description = printf "sqrt(%s)" e.description,
+      descriptionBindingLevel = 0
+    }
 
 exprSin :: (CanSinCosSameType r) => Expr b r -> Expr b r
 exprSin e =
-  e {eval = sin . e.eval, description = printf "sin(%b)" e.description}
+  e
+    { eval = sin . e.eval,
+      description = printf "sin(%s)" e.description,
+      descriptionBindingLevel = 0
+    }
 
 exprCos :: (CanSinCosSameType r) => Expr b r -> Expr b r
 exprCos e =
-  e {eval = cos . e.eval, description = printf "cos(%b)" e.description}
+  e
+    { eval = cos . e.eval,
+      description = printf "cos(%s)" e.description,
+      descriptionBindingLevel = 0
+    }
 
 exprPlus :: (CanAddSameType r) => Expr b r -> Expr b r -> Expr b r
 exprPlus e1 e2 =
@@ -74,7 +129,8 @@ exprPlus e1 e2 =
     { eval = \b -> e1.eval b + e2.eval b,
       vars = e1.vars `Set.union` e2.vars,
       sampleR = e1.sampleR,
-      description = printf "(%b) + (%b)" e1.description e2.description
+      description = printf "%s + %s" (wrapDescription e1 2) (wrapDescription e2 2),
+      descriptionBindingLevel = 2
     }
 
 exprTimes :: (CanMulSameType r) => Expr b r -> Expr b r -> Expr b r
@@ -83,7 +139,8 @@ exprTimes e1 e2 =
     { eval = \b -> e1.eval b * e2.eval b,
       vars = e1.vars `Set.union` e2.vars,
       sampleR = e1.sampleR,
-      description = printf "(%b)*(%b)" e1.description e2.description
+      description = printf "%s⋅%s" (wrapDescription e1 1) (wrapDescription e2 1),
+      descriptionBindingLevel = 1
     }
 
 -- Instances to conveniently build expressions using the usual numerical operators
@@ -134,20 +191,26 @@ instance (CanMulSameType r, CanGetLiteral b r) => CanMulAsymmetric Rational (Exp
 {- Simple formulas over comparisons of expressions -}
 
 data BinaryComp = CompLeq | CompEq
-  deriving (P.Eq)
+  deriving (P.Eq, Generic)
+
+instance Hashable BinaryComp
 
 instance Show BinaryComp where
-  show CompLeq = "<="
-  show CompEq = "=="
+  show CompLeq = "≤"
+  show CompEq = "="
 
 data UnaryConn = ConnNeg
-  deriving (P.Eq)
+  deriving (P.Eq, Generic)
 
 instance Show UnaryConn where
   show ConnNeg = "¬"
 
+instance Hashable UnaryConn
+
 data BinaryConn = ConnAnd | ConnOr | ConnImpl
-  deriving (P.Eq)
+  deriving (P.Eq, Generic)
+
+instance Hashable BinaryConn
 
 instance Show BinaryConn where
   show ConnAnd = "∧"
@@ -161,14 +224,16 @@ data Form expr
   | FormIfThenElse (Form expr) (Form expr) (Form expr)
   | FormTrue
   | FormFalse
-  deriving (P.Eq)
+  deriving (P.Eq, Generic)
+
+instance (Hashable expr) => Hashable (Form expr)
 
 instance (Show expr) => Show (Form expr) where
   show :: Form expr -> String
-  show (FormComp comp l r) = printf "%b %b %b" (show l) (show comp) (show r)
-  show (FormUnary op l) = printf "%b (%b)" (show op) (show l)
-  show (FormBinary op l r) = printf "(%b) %b (%b)" (show l) (show op) (show r)
-  show (FormIfThenElse c t f) = printf "if (%b) then (%b) else (%b)" (show c) (show t) (show f)
+  show (FormComp comp l r) = printf "%s %s %s" (show l) (show comp) (show r)
+  show (FormUnary op l) = printf "%s (%s)" (show op) (show l)
+  show (FormBinary op l r) = printf "(%s) %s (%s)" (show l) (show op) (show r)
+  show (FormIfThenElse c t f) = printf "if (%s) then (%s) else (%s)" (show c) (show t) (show f)
   show FormTrue = "True"
   show FormFalse = "False"
 
@@ -202,7 +267,7 @@ instance CanAndOrAsymmetric (Form expr) (Form expr) where
   or2 = formOr
 
 instance HasIfThenElse (Form expr) (Form expr) where
-  type IfThenElseType (Form expr) (Form expr) =  (Form expr)
+  type IfThenElseType (Form expr) (Form expr) = (Form expr)
   ifThenElse = formIfThenElse
 
 instance ConvertibleExactly Bool (Form expr) where

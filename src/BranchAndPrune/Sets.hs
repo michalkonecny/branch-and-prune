@@ -1,89 +1,63 @@
 module BranchAndPrune.Sets
-  ( IsSet (..),
-    SetFromBasic (..),
-    CanSplitSet (..),
-    CanPrune (..),
-    Paving (..),
-    showPavingSummary,
-    emptyPaving,
-    pavingMerge,
-    pavingAddDecided,
-    pavingInner,
-    pavingOuter,
-    pavingUndecided,
-    pavingInnerOuter,
-    pavingInnerUndecided,
-    pavingOuterUndecided,
+  ( ShowStats (..),
+    IsSet (..),
+    BasicSetsToSet (..),
+    Subset (..),
+    Problem (..),
+    Problem_(..),
+    mkProblem,
+    CanSplitProblem (..),
   )
 where
-import Text.Printf (printf)
+
+import Data.Aeson qualified as A
+import Data.Hashable (Hashable (hash))
+import GHC.Generics (Generic)
 
 class IsSet set where
   emptySet :: set
   setIsEmpty :: set -> Bool
-  setShowStats :: set -> String
   setUnion :: set -> set -> set
 
-class SetFromBasic basicSet set where
-  fromBasicSets :: [basicSet] -> set
+class BasicSetsToSet basicSet set where
+  basicSetsToSet :: [basicSet] -> set
 
-class CanSplitSet basicSet set where
-  splitSet :: set -> [basicSet] -- at least two so that B&P makes progress
-
-class CanPrune m basicSet constraint set where
-  pruneBasicSetM :: constraint -> basicSet -> m (constraint, Paving set)
-
-data Paving set = Paving
-  { inner :: set,
-    undecided :: set,
-    outer :: set
+data Subset subset superset = Subset
+  { subset :: subset,
+    superset :: superset
   }
-  deriving (Eq, Show)
 
-showPavingSummary :: (IsSet set) => Paving set -> String
-showPavingSummary (Paving {..}) =
-  printf "{inner: %s, undecided: %s, outer: %s}" (setShowStats inner) (setShowStats undecided) (setShowStats outer)
-  -- printf "{inner: ??, undecided: %s, outer: %s}" (setShowStats undecided) (setShowStats outer)
-  -- disabling printing of "inner" to avoid inconsistent slow-down when running with 1 thread
+class ShowStats t where
+  showStats :: t -> String
 
-emptyPaving :: (IsSet set) => Paving set
-emptyPaving =
-  Paving
-    { inner = emptySet,
-      undecided = emptySet,
-      outer = emptySet
-    }
+-- | A constraint problem with a scope and constraint.
+--
+-- Construct using
+-- @
+-- mkProblem (Problem_ { scope = ..., constraint = ... })
+-- @
+data Problem constraint basicSet = Problem
+  { scope :: basicSet,
+    constraint :: constraint,
+    contentHash :: String
+  }
+  deriving (Show, Generic)
 
-pavingMerge :: (IsSet set) => Paving set -> Paving set -> Paving set
-pavingMerge paving1 paving2 =
-  paving1
-    { inner = paving1.inner `setUnion` paving2.inner,
-      undecided = paving1.undecided `setUnion` paving2.undecided,
-      outer = paving1.outer `setUnion` paving2.outer
-    }
+data Problem_ constraint basicSet = Problem_
+  { scope :: basicSet,
+    constraint :: constraint
+  }
+  deriving (Show, Generic)
 
-pavingAddDecided :: (IsSet set) => Paving set -> Paving set -> Paving set
-pavingAddDecided paving1 paving2 =
-  paving1
-    { inner = paving1.inner `setUnion` paving2.inner,
-      outer = paving1.outer `setUnion` paving2.outer
-    }
+mkProblem ::
+  (Hashable basicSet, Hashable constraint) =>
+  Problem_ constraint basicSet ->
+  Problem constraint basicSet
+mkProblem (Problem_ {scope, constraint}) =
+  Problem {contentHash = show $ hash (scope, constraint), ..}
 
-pavingInner :: (IsSet set) => set -> Paving set
-pavingInner inner = Paving {inner, undecided = emptySet, outer = emptySet}
+instance (A.ToJSON basicSet, A.ToJSON constraint) => A.ToJSON (Problem constraint basicSet) where
+  toEncoding = A.genericToEncoding A.defaultOptions
 
-pavingOuter :: (IsSet set) => set -> Paving set
-pavingOuter outer = Paving {inner = emptySet, undecided = emptySet, outer}
-
-pavingUndecided :: (IsSet set) => set -> Paving set
-pavingUndecided undecided = Paving {undecided, inner = emptySet, outer = emptySet}
-
-pavingInnerOuter :: (IsSet set) => set -> set -> Paving set
-pavingInnerOuter inner outer = Paving {inner, undecided = emptySet, outer}
-
-pavingInnerUndecided :: (IsSet set) => set -> set -> Paving set
-pavingInnerUndecided inner undecided = Paving {inner, undecided, outer = emptySet}
-
-pavingOuterUndecided :: (IsSet set) => set -> set -> Paving set
-pavingOuterUndecided outer undecided = Paving {inner = emptySet, undecided, outer}
-
+class CanSplitProblem constraint basicSet where
+  splitProblem :: Problem constraint basicSet -> [Problem constraint basicSet] -- at least two so that B&P makes progress
