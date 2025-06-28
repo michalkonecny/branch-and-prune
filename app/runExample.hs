@@ -139,22 +139,17 @@ sampleMPAffine = MPAffine _conf (convertExactly 0) Map.empty
     _conf :: MPAffineConfig
     _conf = MPAffineConfig {maxTerms = int 10, precision = 1000}
 
-processArgs :: (ProblemR r) => r -> [String] -> (BoxProblem r, Rational, Int, BPLogConfig)
-processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS, logConfigS] =
-  (prob, giveUpAccuracy, maxThreads, logConfig)
+processArgs :: (ProblemR r) => r -> [String] -> (BoxProblem r, Rational, Int)
+processArgs sampleR [probS, epsS, giveUpAccuracyS, maxThreadsS] =
+  (prob, giveUpAccuracy, maxThreads)
   where
     prob = fromJust $ Map.lookup probS (problems sampleR eps)
     eps = toRational (read epsS :: Double)
     giveUpAccuracy = toRational (read giveUpAccuracyS :: Double)
     maxThreads = read maxThreadsS :: Int
-    logConfig = case logConfigS of
-      "debug" -> defaultBPLogConfig {shouldLogDebugMessages = True}
-      "file" -> defaultBPLogConfig {stepsFile = Just "steps.json"}
-      "redis" -> defaultBPLogConfig {stepsRedisKey = Just "steps_json"}
-      _ -> defaultBPLogConfig
 processArgs _ _ =
   error
-    $ "Failed to match args.  Expected args: arithmetic problem eps giveUpAccuracy maxThreads logConfig"
+    $ "Failed to match args.  Expected args: arithmetic problem eps giveUpAccuracy maxThreads"
     ++ "\n Available arithmetics: IA, AA"
     ++ "\n Available problems: "
     ++ (List.concat $ List.map ("\n" ++) problemNames)
@@ -178,8 +173,8 @@ main = do
     _ ->
       error $ "unknown arithmetic: " ++ arith
 
-mainWithArgs :: (ProblemR r) => (BoxProblem r, Rational, Int, BPLogConfig) -> IO ()
-mainWithArgs (problem, giveUpAccuracy, maxThreads, logConfig) =
+mainWithArgs :: (ProblemR r) => (BoxProblem r, Rational, Int) -> IO ()
+mainWithArgs (problem, giveUpAccuracy, maxThreads) =
   runStdoutLoggingT task
   where
     task :: (MonadLogger m, MonadUnliftIO m) => m ()
@@ -190,6 +185,6 @@ mainWithArgs (problem, giveUpAccuracy, maxThreads, logConfig) =
             { maxThreads,
               giveUpAccuracy = giveUpAccuracy,
               problem,
-              logConfig
+              logConfig = defaultBPLogConfig {shouldLogDebugMessages = True}
             }
       liftIO $ putStrLn $ showPavingSummary paving
