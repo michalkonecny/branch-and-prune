@@ -3,7 +3,7 @@
 module BranchAndPrune.ExampleInstances.SimpleBoxes.JSON () where
 
 import AERN2.MP qualified as MP
-import BranchAndPrune.ExampleInstances.RealConstraints (Expr (..), Form (..), BinaryComp, BinaryConn, UnaryConn)
+import BranchAndPrune.ExampleInstances.RealConstraints (Expr (..), Form (..), BinaryComp, BinaryConn, UnaryConn, ExprStruct, BinaryOp, UnaryOp)
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes (Box (..), Boxes (..))
 import Data.Aeson (ToJSON (toJSON), (.=))
 import Data.Aeson qualified as A
@@ -27,8 +27,17 @@ instance A.ToJSON MP.MPBall where
       lD = double l
       uD = double u
 
+instance A.ToJSON UnaryOp where
+  toJSON op = A.toJSON (show op)
+
+instance A.ToJSON BinaryOp where
+  toJSON op = A.toJSON (show op)
+
+instance (A.ToJSON expr) => A.ToJSON (ExprStruct expr) where
+  toEncoding = A.genericToEncoding A.defaultOptions
+
 instance A.ToJSON (Expr b r) where
-  toJSON e = A.toJSON e.description -- a dummy String JSON instance
+  toJSON e = A.toJSON e.structure
 
 instance A.ToJSON BinaryComp where
   toJSON bc = A.toJSON (show bc)
