@@ -21,18 +21,16 @@ module BranchAndPrune.ExampleInstances.IntSets
   )
 where
 
+import BranchAndPrune.BranchAndPrune (CanControlSteps)
 import BranchAndPrune.BranchAndPrune qualified as BP
-import BranchAndPrune.Logging
+import BranchAndPrune.Steps qualified as BP
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
-import Data.Aeson qualified as A
+import Data.Hashable (Hashable)
 import Data.Set qualified as Set
 import GHC.Generics
-import Data.Hashable (Hashable)
 
 newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show, Generic)
-
-instance A.ToJSON IntSet
 
 instance BP.ShowStats IntSet where
   showStats (IntSet set) = show (Set.size set)
@@ -47,14 +45,10 @@ data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int}
 
 instance Hashable BasicIntSet
 
-instance A.ToJSON BasicIntSet
-
 data IntConstraint = IntEq Int | IntTrue | IntFalse -- \| IntNeq Int
   deriving (Eq, Show, Generic)
 
 instance Hashable IntConstraint
-
-instance A.ToJSON IntConstraint
 
 instance BP.CanSplitProblem IntConstraint BasicIntSet where
   splitProblem (BP.Problem {scope = BasicIntSet l u, constraint}) =
@@ -113,22 +107,31 @@ instance BP.IsPriorityQueue (IntSetStack elem) elem where
       (esL, esR) = splitAt splitPoint es
   queueMerge (IntSetStack stackL) (IntSetStack stackR) = IntSetStack $ stackL ++ stackR
 
-data IntSetBPParams = IntSetBPParams
-  { problem :: BP.Problem IntConstraint BasicIntSet
-  }
+type IntSetProblem = BP.Problem IntConstraint BasicIntSet
 
-intSetBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => IntSetBPParams -> m (BP.Result IntConstraint BasicIntSet IntSet)
+type IntSetPaving = BP.Paving IntConstraint BasicIntSet IntSet
+
+type IntSetStep = BP.Step IntSetProblem IntSetPaving
+
+type IntSetResult = BP.Result IntConstraint BasicIntSet IntSet
+
+newtype IntSetBPParams = IntSetBPParams
+  {problem :: IntSetProblem}
+
+intSetBranchAndPrune ::
+  (MonadLogger m, MonadUnliftIO m, CanControlSteps m IntSetStep) =>
+  IntSetBPParams -> m IntSetResult
 intSetBranchAndPrune (IntSetBPParams {..}) =
   BP.branchAndPruneM
-    (getLoggingFunctions $ defaultBPLogConfig {shouldLogDebugMessages = True})
     ( BP.Params
         { BP.problem,
           BP.shouldAbort = const Nothing,
           BP.shouldGiveUpSolvingProblem = const False,
           BP.dummyPriorityQueue,
-          BP.maxThreads = 2
+          BP.maxThreads = 2,
+          BP.shouldLog = True
         }
     )
   where
-    dummyPriorityQueue :: IntSetStack (BP.Problem IntConstraint BasicIntSet)
+    dummyPriorityQueue :: IntSetStack IntSetProblem
     dummyPriorityQueue = IntSetStack [problem]

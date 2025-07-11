@@ -5,7 +5,6 @@ module BranchAndPrune.Steps
   )
 where
 
-import Data.Aeson qualified as A
 import GHC.Generics
 
 data Step problem paving
@@ -28,6 +27,3 @@ data Step problem paving
       }
   | DoneStep
   deriving (Show, Generic)
-
-instance (A.ToJSON problem, A.ToJSON paving) => A.ToJSON (Step problem paving) where
-  toEncoding = A.genericToEncoding (A.defaultOptions)

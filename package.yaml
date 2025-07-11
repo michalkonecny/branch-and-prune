@@ -30,7 +30,6 @@ dependencies:
 - time
 - unliftio-core
 - stm
-- aeson
 - hedis
 - mixed-types-num
 - aern2-mp

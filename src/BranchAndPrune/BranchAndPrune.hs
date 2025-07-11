@@ -4,10 +4,11 @@
 module BranchAndPrune.BranchAndPrune
   ( module BranchAndPrune.Sets,
     module BranchAndPrune.Paving,
-    LoggingFunctions (..),
     IsPriorityQueue (..),
     Params (..),
     Result (..),
+    CanInitControl (..),
+    CanControlSteps (..),
     branchAndPruneM,
   )
 where
@@ -17,18 +18,14 @@ import BranchAndPrune.Paving
 import BranchAndPrune.Sets
 import BranchAndPrune.Steps
 import Control.Monad (when)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Monad.Logger (MonadLogger)
+import Control.Monad.Logger (MonadLogger, logDebugN)
 import Data.Maybe (isJust)
+import Data.Text qualified as T
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.Format.ISO8601 (iso8601Show)
 import Text.Printf (printf)
-
-data LoggingFunctions resources step m = LoggingFunctions
-  { initLogging :: m resources,
-    logDebugStr :: resources -> String -> m (),
-    logStep :: resources -> step -> m (),
-    finaliseLogging :: resources -> m ()
-  }
 
 class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   singletonQueue :: elem -> priorityQueue
@@ -43,7 +40,8 @@ data Params m basicSet set priorityQueue constraint = Params
     shouldAbort :: Paving constraint basicSet set -> Maybe String,
     shouldGiveUpSolvingProblem :: Problem constraint basicSet -> Bool,
     maxThreads :: Int,
-    dummyPriorityQueue :: priorityQueue
+    dummyPriorityQueue :: priorityQueue,
+    shouldLog :: Bool
   }
 
 data Result constraint basicSet set = Result
@@ -76,48 +74,63 @@ baseResultOnPrevPaving ::
 baseResultOnPrevPaving prevPaving res =
   res {paving = prevPaving `pavingMerge` res.paving}
 
+class CanInitControl m where
+  type ControlResources m
+  initControl :: m (ControlResources m)
+  finaliseControl :: ControlResources m -> m ()
+
+class (CanInitControl m) => CanControlSteps m step where
+  reportStep :: ControlResources m -> step -> m ()
+
+logDebugStr :: (MonadIO m, MonadLogger m) => String -> m ()
+logDebugStr str = do
+  currTime <- iso8601Show <$> liftIO getCurrentTime
+  let msgToLog = currTime <> ": " <> str
+  logDebugN (T.pack msgToLog)
+
 branchAndPruneM ::
   ( IsSet set,
     CanSplitProblem constraint basicSet,
     CanPrune m constraint basicSet set,
     IsPriorityQueue priorityQueue (Problem constraint basicSet),
+    step ~ Step (Problem constraint basicSet) (Paving constraint basicSet set),
     MonadLogger m,
     MonadUnliftIO m,
+    CanControlSteps m step,
     Show constraint,
     Show basicSet,
     Show set
   ) =>
-  LoggingFunctions resources (Step (Problem constraint basicSet) (Paving constraint basicSet set)) m ->
   Params m basicSet set priorityQueue constraint ->
   m (Result constraint basicSet set)
-branchAndPruneM (LoggingFunctions {..}) (Params {problem = initialProblem, ..} :: Params m basicSet set priorityQueue constraint) =
+branchAndPruneM (Params {problem = initialProblem, ..} :: Params m basicSet set priorityQueue constraint) =
   do
     -- initialise process resources
-    threadResources <- liftIO $ initThreadResources
-    logResources <- initLogging
+    threadResources <- liftIO initThreadResources
+    ctrlResources <- initControl
 
     -- run the process
-    result <- bpProcess logResources threadResources
+    result <- bpProcess ctrlResources threadResources
 
     -- finalise process resources
-    finaliseLogging logResources
+    finaliseControl ctrlResources
     pure result
   where
-    bpProcess logResources threadResources = do
+    bpProcess ctrlResources threadResources = do
       logDebugStrR "B&P process starting"
-      logStepR $ InitStep {problem = initialProblem}
+      reportStepR $ InitStep {problem = initialProblem}
 
       -- start the recursive and parallel paving process with initial problem in the queue
       let initQueue = singletonQueue initialProblem
       result <- steps 0 (emptyPaving initialProblem.scope) initQueue
 
       logDebugStrR "B&P process finishing"
-      logStepR $ DoneStep
+      reportStepR DoneStep
 
       pure result
       where
-        logStepR = logStep logResources
-        logDebugStrR = logDebugStr logResources
+        reportStepR = reportStep ctrlResources
+        logDebugStrR s = when shouldLog $ logDebugStr s
 
         steps :: Int -> Paving constraint basicSet set -> priorityQueue -> m (Result constraint basicSet set)
         steps threadNumber pavingSoFar queue =
@@ -126,7 +139,7 @@ branchAndPruneM (LoggingFunctions {..}) (Params {problem = initialProblem, ..} :
             Just abortDetail ->
               do
                 -- abort
-                logStepR $ AbortStep {detail = abortDetail}
+                reportStepR $ AbortStep {detail = abortDetail}
                 logDebugStrT $ "Aborting the B&P process: " ++ abortDetail
                 pure $ Result {paving = pavingSoFar, aborted = Just abortDetail}
             _ ->
@@ -146,7 +159,7 @@ branchAndPruneM (LoggingFunctions {..}) (Params {problem = initialProblem, ..} :
                       then do
                         -- report giving up
                         logDebugStrT $ printf "Leaving problem undecided on: %s" (show problem.scope)
-                        logStepR $ GiveUpOnProblemStep {problemHash}
+                        reportStepR $ GiveUpOnProblemStep {problemHash}
 
                         -- register problem as undecided and continue
                         let undecidedWithP = problem : pavingSoFar.undecided
@@ -157,7 +170,7 @@ branchAndPruneM (LoggingFunctions {..}) (Params {problem = initialProblem, ..} :
                         logDebugStrT $ printf "Pruning on: %s" (show problem)
                         prunePaving <- pruneProblemM problem
                         when (pavingHasInfo prunePaving) $ do
-                          logStepR $ PruneStep {problemHash, prunePaving}
+                          reportStepR $ PruneStep {problemHash, prunePaving}
 
                         -- register what the pruning decided
                         let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
@@ -176,7 +189,7 @@ branchAndPruneM (LoggingFunctions {..}) (Params {problem = initialProblem, ..} :
                                   [p] -> splitProblem p
                                   problems -> problems
                             logDebugStrT $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
-                            logStepR $ SplitStep {problemHash, pieces = pruneUndecidedSplit}
+                            reportStepR $ SplitStep {problemHash, pieces = pruneUndecidedSplit}
 
                             -- add the subset left-over from pruning to the queue
                             let queueWithPruningUndecided = queuePicked `queueAddMany` pruneUndecidedSplit
@@ -188,8 +201,8 @@ branchAndPruneM (LoggingFunctions {..}) (Params {problem = initialProblem, ..} :
                                 do
                                   -- yes, fork the queue between two new threads
                                   logDebugStrT "Forking queue into two queues to process independently"
-                                  let compL = \threadNumberL -> steps threadNumberL (emptyPaving pavingSoFar.scope) queueL
-                                  let compR = \threadNumberR -> steps threadNumberR (emptyPaving pavingSoFar.scope) queueR
+                                  let compL threadNumberL = steps threadNumberL (emptyPaving pavingSoFar.scope) queueL
+                                  let compR threadNumberR = steps threadNumberR (emptyPaving pavingSoFar.scope) queueR
 
                                   -- This is what the forkAndMerge does, but in parallel:
                                   --    resultL <- compL
@@ -202,4 +215,6 @@ branchAndPruneM (LoggingFunctions {..}) (Params {problem = initialProblem, ..} :
                                 steps threadNumber pavingWithPruningDecided queueWithPruningUndecided
           where
             logDebugStrT (s :: String) = do
-              logDebugStr logResources $ "Thread " ++ show threadNumber ++ ":" ++ s
+              when shouldLog $
+                logDebugStr $
+                  "Thread " ++ show threadNumber ++ ":" ++ s

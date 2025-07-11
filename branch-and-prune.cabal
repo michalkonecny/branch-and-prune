@@ -1,6 +1,6 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.36.0.
+-- This file has been generated from package.yaml by hpack version 0.38.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -32,9 +32,7 @@ library
       BranchAndPrune.ExampleInstances.RealConstraints
       BranchAndPrune.ExampleInstances.SimpleBoxes
       BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
-      BranchAndPrune.ExampleInstances.SimpleBoxes.JSON
       BranchAndPrune.ForkUtils
-      BranchAndPrune.Logging
       BranchAndPrune.Paving
       BranchAndPrune.Sets
       BranchAndPrune.Steps
@@ -54,7 +52,6 @@ library
   build-depends:
       aern2-affarith
     , aern2-mp
-    , aeson
     , base >=4.7 && <5
     , bytestring
     , containers
@@ -89,7 +86,6 @@ test-suite branch-and-prune-test
   build-depends:
       aern2-affarith
     , aern2-mp
-    , aeson
     , base >=4.7 && <5
     , branch-and-prune
     , bytestring

@@ -10,7 +10,6 @@ module BranchAndPrune.Sets
   )
 where
 
-import Data.Aeson qualified as A
 import Data.Hashable (Hashable (hash))
 import GHC.Generics (Generic)
 
@@ -55,9 +54,6 @@ mkProblem ::
   Problem constraint basicSet
 mkProblem (Problem_ {scope, constraint}) =
   Problem {contentHash = show $ hash (scope, constraint), ..}
-
-instance (A.ToJSON basicSet, A.ToJSON constraint) => A.ToJSON (Problem constraint basicSet) where
-  toEncoding = A.genericToEncoding A.defaultOptions
 
 class CanSplitProblem constraint basicSet where
   splitProblem :: Problem constraint basicSet -> [Problem constraint basicSet] -- at least two so that B&P makes progress

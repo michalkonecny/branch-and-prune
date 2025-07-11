@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -16,7 +15,6 @@ module BranchAndPrune.ExampleInstances.SimpleBoxes
     ExprB,
     FormB,
     BoxBPParams (..),
-    BPLogConfig (..),
     boxBranchAndPrune,
   )
 where
@@ -28,8 +26,7 @@ import BranchAndPrune.BranchAndPrune (CanSplitProblem (splitProblem))
 import BranchAndPrune.BranchAndPrune qualified as BP
 import BranchAndPrune.ExampleInstances.RealConstraints
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
-import BranchAndPrune.ExampleInstances.SimpleBoxes.JSON ()
-import BranchAndPrune.Logging
+import BranchAndPrune.Steps qualified as BP
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.Hashable (Hashable)
@@ -74,6 +71,12 @@ type ExprB r = Expr Box r
 type FormB r = Form (ExprB r)
 
 type BoxProblem r = BP.Problem (FormB r) Box
+
+type BoxPaving r = BP.Paving (FormB r) Box Boxes
+
+type BoxStep r = BP.Step (BoxProblem r) (BoxPaving r)
+
+type BoxResult r = BP.Result (FormB r) Box Boxes
 
 type HasKleenanComparison r =
   ( HasOrder r r,
@@ -162,7 +165,7 @@ data BoxBPParams r = BoxBPParams
   { problem :: BoxProblem r,
     maxThreads :: Int,
     giveUpAccuracy :: Rational,
-    logConfig :: BPLogConfig
+    shouldLog :: Bool
   }
 
 shouldGiveUpOnBoxProblem :: Rational -> BoxProblem r -> Bool
@@ -174,17 +177,24 @@ shouldGiveUpOnBoxProblem giveUpAccuracy (BP.Problem {scope = Box {..}}) =
       where
         diameter = 2 * MP.radius ball
 
-boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) => BoxBPParams r -> m (BP.Result (FormB r) Box Boxes)
+boxBranchAndPrune ::
+  ( MonadLogger m,
+    MonadUnliftIO m,
+    HasKleenanComparison r,
+    BP.CanControlSteps m (BoxStep r)
+  ) =>
+  BoxBPParams r ->
+  m (BoxResult r)
 boxBranchAndPrune (BoxBPParams {..} :: BoxBPParams r) = do
   -- conn <- liftIO $ Redis.checkedConnect Redis.defaultConnectInfo
   BP.branchAndPruneM
-    (getLoggingFunctions logConfig)
     ( BP.Params
         { BP.problem,
           BP.shouldAbort = const Nothing,
           BP.shouldGiveUpSolvingProblem = shouldGiveUpOnBoxProblem giveUpAccuracy :: BoxProblem r -> Bool,
           BP.dummyPriorityQueue,
-          BP.maxThreads
+          BP.maxThreads,
+          BP.shouldLog
         }
     )
   where
