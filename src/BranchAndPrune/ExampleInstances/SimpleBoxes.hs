@@ -29,7 +29,6 @@ import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
 import BranchAndPrune.Steps qualified as BP
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
-import Data.Hashable (Hashable)
 import Data.Map qualified as Map
 import GHC.Records
 import MixedTypesNumPrelude
@@ -37,9 +36,9 @@ import MixedTypesNumPrelude
 -- import Prelude qualified as P
 
 {- Problem splitting -}
-instance (Hashable constraint) => BP.CanSplitProblem constraint Box where
+instance BP.CanSplitProblem constraint Box where
   splitProblem (BP.Problem {scope, constraint}) =
-    map (\box -> BP.mkProblem $ BP.Problem_ {scope = box, constraint}) $ splitBox scope
+    map (\box -> BP.Problem {scope = box, constraint}) $ splitBox scope
 
 splitBox :: Box -> [Box]
 splitBox box = case box.splitOrder of
@@ -92,7 +91,7 @@ instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m (FormB r) Box 
       pavingP = case cP of
         FormTrue -> BP.pavingInner scope (Boxes [scope])
         FormFalse -> BP.pavingOuter scope (Boxes [scope])
-        _ -> BP.pavingUndecided scope [BP.mkProblem $ BP.Problem_ {scope, constraint = cP}]
+        _ -> BP.pavingUndecided scope [BP.Problem {scope, constraint = cP}]
 
 simplifyOnBox :: (HasKleenanComparison r) => Box -> FormB r -> FormB r
 simplifyOnBox box = simplify

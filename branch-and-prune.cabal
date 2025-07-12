@@ -55,8 +55,6 @@ library
     , base >=4.7 && <5
     , bytestring
     , containers
-    , hashable
-    , hedis
     , mixed-types-num
     , monad-logger
     , stm
@@ -90,8 +88,6 @@ test-suite branch-and-prune-test
     , branch-and-prune
     , bytestring
     , containers
-    , hashable
-    , hedis
     , hspec
     , mixed-types-num
     , monad-logger

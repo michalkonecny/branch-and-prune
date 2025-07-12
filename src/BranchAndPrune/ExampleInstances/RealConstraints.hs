@@ -3,7 +3,6 @@
 module BranchAndPrune.ExampleInstances.RealConstraints
   ( Var,
     Expr (..),
-    ExprStruct (..),
     UnaryOp (..),
     BinaryOp (..),
     exprVar,
@@ -19,9 +18,7 @@ module BranchAndPrune.ExampleInstances.RealConstraints
   )
 where
 
-import Data.Hashable (Hashable (hashWithSalt))
 import Data.Set as Set
-import GHC.Generics (Generic)
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import Prelude qualified as P
@@ -34,7 +31,7 @@ data Expr b r = Expr
   { eval :: b -> r,
     vars :: Set.Set Var,
     sampleR :: r,
-    structure :: ExprStruct (Expr b r),
+    description :: String,
     opBindingLevel :: Int
     {-
       The binding level of the expression's root operators.
@@ -52,16 +49,23 @@ data Expr b r = Expr
     -}
   }
 
-data ExprStruct expr
-  = ExprVar { var :: Var }
-  | ExprLit { lit :: Rational }
-  | ExprUnary { unop :: UnaryOp, e1 :: expr }
-  | ExprBinary { binop :: BinaryOp, e1 :: expr, e2 :: expr}
-  deriving (P.Eq, Generic)
+wrapDescription :: Expr b r -> Int -> String
+wrapDescription (Expr {..}) level
+  | opBindingLevel < level = description
+  | otherwise = "(" <> description <> ")"
 
-data UnaryOp = 
-  OpNeg | OpSqrt | OpSin | OpCos
-  deriving (P.Eq, Generic)
+instance Show (Expr b r) where
+  show expr = expr.description
+
+instance P.Eq (Expr b r) where
+  expr1 == expr2 = expr1.description == expr2.description
+
+data UnaryOp
+  = OpNeg
+  | OpSqrt
+  | OpSin
+  | OpCos
+  deriving (P.Eq)
 
 instance (Show UnaryOp) where
   show OpNeg = "-"
@@ -69,41 +73,18 @@ instance (Show UnaryOp) where
   show OpSin = "sin"
   show OpCos = "cos"
 
-data BinaryOp =
-  OpPlus | OpMinus | OpTimes | OpDivide
-  deriving (P.Eq, Generic)
+data BinaryOp
+  = OpPlus
+  | OpMinus
+  | OpTimes
+  | OpDivide
+  deriving (P.Eq)
 
 instance (Show BinaryOp) where
   show OpPlus = "+"
   show OpMinus = "-"
   show OpTimes = "*"
   show OpDivide = "/"
-
-instance Show (ExprStruct (Expr b r)) where
-  show (ExprVar var) = var
-  show (ExprLit c) = show (double c)
-  show (ExprUnary OpNeg e) = printf "-%s" (wrapDescription e 2)
-  show (ExprUnary OpSqrt e) = printf "sqrt(%s)" (show e)
-  show (ExprUnary OpSin e) = printf "sin(%s)" (show e)
-  show (ExprUnary OpCos e) = printf "cos(%s)" (show e)
-  show (ExprBinary OpPlus e1 e2) = printf "%s + %s" (wrapDescription e1 2) (wrapDescription e2 2)
-  show (ExprBinary OpMinus e1 e2) = printf "%s - %s" (wrapDescription e1 2) (wrapDescription e2 1)
-  show (ExprBinary OpTimes e1 e2) = printf "%s⋅%s" (wrapDescription e1 1) (wrapDescription e2 1)
-  show (ExprBinary OpDivide e1 e2) = printf "%s/%s" (wrapDescription e1 1) (wrapDescription e2 1)
-
-wrapDescription :: (Expr b r) -> Int -> String
-wrapDescription (Expr {..}) level
-  | opBindingLevel < level = show structure
-  | otherwise = "(" <> show structure <> ")"
-
-instance Show (Expr b r) where
-  show expr = show expr.structure
-
-instance P.Eq (Expr b r) where
-  expr1 == expr2 = expr1.structure P.== expr2.structure
-
-instance Hashable (Expr b r) where
-  hashWithSalt salt expr = hashWithSalt salt (show expr)
 
 class CanGetVarDomain b r where
   getVarDomain :: r -> b -> Var -> r
@@ -114,7 +95,7 @@ exprVar sampleR var =
     { eval = \b -> getVarDomain sampleR b var,
       vars = Set.singleton var,
       sampleR,
-      structure = ExprVar var,
+      description = var,
       opBindingLevel = 0
     }
 
@@ -127,7 +108,7 @@ exprLit sampleR literal =
     { eval,
       vars = Set.empty,
       sampleR,
-      structure = ExprLit literal,
+      description = show (double literal),
       opBindingLevel = if literal < (0 :: Integer) then 2 else 0
     }
   where
@@ -137,7 +118,7 @@ exprNeg :: (CanNegSameType r) => Expr b r -> Expr b r
 exprNeg e =
   e
     { eval = negate . e.eval,
-      structure = ExprUnary OpNeg e,
+      description = printf "-%s" (wrapDescription e 2),
       opBindingLevel = 2
     }
 
@@ -145,7 +126,7 @@ exprSqrt :: (CanSqrtSameType r) => Expr b r -> Expr b r
 exprSqrt e =
   e
     { eval = sqrt . e.eval,
-      structure = ExprUnary OpSqrt e,
+      description = printf "sqrt(%s)" e.description,
       opBindingLevel = 0
     }
 
@@ -153,7 +134,7 @@ exprSin :: (CanSinCosSameType r) => Expr b r -> Expr b r
 exprSin e =
   e
     { eval = sin . e.eval,
-      structure = ExprUnary OpSin e,
+      description = printf "sin(%s)" e.description,
       opBindingLevel = 0
     }
 
@@ -161,7 +142,7 @@ exprCos :: (CanSinCosSameType r) => Expr b r -> Expr b r
 exprCos e =
   e
     { eval = cos . e.eval,
-      structure = ExprUnary OpCos e,
+      description = printf "cos(%s)" e.description,
       opBindingLevel = 0
     }
 
@@ -169,9 +150,9 @@ exprPlus :: (CanAddSameType r) => Expr b r -> Expr b r -> Expr b r
 exprPlus e1 e2 =
   Expr
     { eval = \b -> e1.eval b + e2.eval b,
+      description = printf "%s + %s" (wrapDescription e1 2) (wrapDescription e2 2),
       vars = e1.vars `Set.union` e2.vars,
       sampleR = e1.sampleR,
-      structure = ExprBinary OpPlus e1 e2,
       opBindingLevel = 2
     }
 
@@ -179,9 +160,9 @@ exprTimes :: (CanMulSameType r) => Expr b r -> Expr b r -> Expr b r
 exprTimes e1 e2 =
   Expr
     { eval = \b -> e1.eval b * e2.eval b,
+      description = printf "%s⋅%s" (wrapDescription e1 1) (wrapDescription e2 1),
       vars = e1.vars `Set.union` e2.vars,
       sampleR = e1.sampleR,
-      structure = ExprBinary OpTimes e1 e2,
       opBindingLevel = 1
     }
 
@@ -233,26 +214,20 @@ instance (CanMulSameType r, CanGetLiteral b r) => CanMulAsymmetric Rational (Exp
 {- Simple formulas over comparisons of expressions -}
 
 data BinaryComp = CompLeq | CompEq
-  deriving (P.Eq, Generic)
-
-instance Hashable BinaryComp
+  deriving (P.Eq)
 
 instance Show BinaryComp where
   show CompLeq = "≤"
   show CompEq = "="
 
 data UnaryConn = ConnNeg
-  deriving (P.Eq, Generic)
+  deriving (P.Eq)
 
 instance Show UnaryConn where
   show ConnNeg = "¬"
 
-instance Hashable UnaryConn
-
 data BinaryConn = ConnAnd | ConnOr | ConnImpl
-  deriving (P.Eq, Generic)
-
-instance Hashable BinaryConn
+  deriving (P.Eq)
 
 instance Show BinaryConn where
   show ConnAnd = "∧"
@@ -260,15 +235,13 @@ instance Show BinaryConn where
   show ConnImpl = "⇒"
 
 data Form expr
-  = FormComp {comp :: BinaryComp, e1 :: expr, e2 :: expr}
-  | FormUnary {uconn :: UnaryConn, f1 :: (Form expr)}
-  | FormBinary {bconn :: BinaryConn, f1 :: (Form expr), f2 :: (Form expr)}
-  | FormIfThenElse {fc :: (Form expr), ft :: (Form expr), ff :: (Form expr)}
+  = FormComp BinaryComp expr expr
+  | FormUnary UnaryConn (Form expr)
+  | FormBinary BinaryConn (Form expr) (Form expr)
+  | FormIfThenElse (Form expr) (Form expr) (Form expr)
   | FormTrue
   | FormFalse
-  deriving (P.Eq, Generic)
-
-instance (Hashable expr) => Hashable (Form expr)
+  deriving (P.Eq)
 
 instance (Show expr) => Show (Form expr) where
   show :: Form expr -> String

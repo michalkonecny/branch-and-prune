@@ -153,13 +153,12 @@ branchAndPruneM (Params {problem = initialProblem, ..} :: Params m basicSet set 
                 Just (problem, queuePicked) ->
                   do
                     logDebugStrT $ printf "Picked problem: %s" (show problem)
-                    let problemHash = problem.contentHash
                     -- check if we should dig deeper into the next basic set or give up
                     if shouldGiveUpSolvingProblem problem
                       then do
                         -- report giving up
                         logDebugStrT $ printf "Leaving problem undecided on: %s" (show problem.scope)
-                        reportStepR $ GiveUpOnProblemStep {problemHash}
+                        reportStepR $ GiveUpOnProblemStep {problem}
 
                         -- register problem as undecided and continue
                         let undecidedWithP = problem : pavingSoFar.undecided
@@ -170,7 +169,7 @@ branchAndPruneM (Params {problem = initialProblem, ..} :: Params m basicSet set 
                         logDebugStrT $ printf "Pruning on: %s" (show problem)
                         prunePaving <- pruneProblemM problem
                         when (pavingHasInfo prunePaving) $ do
-                          reportStepR $ PruneStep {problemHash, prunePaving}
+                          reportStepR $ PruneStep {problem, prunePaving}
 
                         -- register what the pruning decided
                         let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
@@ -189,7 +188,7 @@ branchAndPruneM (Params {problem = initialProblem, ..} :: Params m basicSet set 
                                   [p] -> splitProblem p
                                   problems -> problems
                             logDebugStrT $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
-                            reportStepR $ SplitStep {problemHash, pieces = pruneUndecidedSplit}
+                            reportStepR $ SplitStep {problem, pieces = pruneUndecidedSplit}
 
                             -- add the subset left-over from pruning to the queue
                             let queueWithPruningUndecided = queuePicked `queueAddMany` pruneUndecidedSplit

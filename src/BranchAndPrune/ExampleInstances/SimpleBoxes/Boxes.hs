@@ -25,15 +25,10 @@ import GHC.Records
 import MixedTypesNumPrelude
 import Text.Printf (printf)
 import Prelude qualified as P
-import Data.Hashable (Hashable)
-import GHC.Generics (Generic)
 
 {- N-dimensional Boxes -}
 
 data Box = Box {varDomains :: Map.Map Var MP.MPBall, splitOrder :: [Var]}
-  deriving (Generic)
-
-instance Hashable Box
 
 instance Show Box where
   show (Box {..}) =
@@ -77,7 +72,7 @@ boxAreaD (Box {..}) = product (map (double . dyadic . MP.radius) (Map.elems varD
 data Boxes
   = Boxes [Box]
   | BoxesUnion [Boxes]
-  deriving (P.Eq, Show, Generic)
+  deriving (P.Eq, Show)
 
 boxesCount :: Boxes -> Integer
 boxesCount (Boxes boxes) = length boxes

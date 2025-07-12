@@ -6,7 +6,7 @@ module Main (main) where
 import AERN2.MP (Kleenean, MPBall, mpBallP)
 import AERN2.MP qualified as MP
 import AERN2.MP.Affine (MPAffine (MPAffine), MPAffineConfig (..))
-import BranchAndPrune.BranchAndPrune (Problem_ (..), Result (Result), mkProblem, showPavingSummary, CanInitControl(..), CanControlSteps(..))
+import BranchAndPrune.BranchAndPrune (CanControlSteps (..), CanInitControl (..), Problem (..), Result (Result), showPavingSummary)
 import BranchAndPrune.ExampleInstances.RealConstraintEval.AffArith ()
 import BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall ()
 import BranchAndPrune.ExampleInstances.RealConstraints
@@ -53,74 +53,67 @@ problems :: (ProblemR r) => r -> Rational -> Map.Map String (BoxProblem r)
 problems (sampleR :: r) eps =
   Map.fromList
     [ ( "transitivityEps",
-        mkProblem
-          $ Problem_
-            { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))],
-              constraint = (((x + eps) <= y) && (y <= z)) `formImpl` (x <= z)
-            }
+        Problem
+          { scope = mkBox [("x", (0.0, 2.0)), ("y", (0.0, 2.0)), ("z", (0.0, 2.0))],
+            constraint = (((x + eps) <= y) && (y <= z)) `formImpl` (x <= z)
+          }
       ),
       ( "simpleAnd",
-        mkProblem
-          $ Problem_
-            { scope = mkBox [("x", (0.0, 1.0)), ("y", (0.0, 2.0))],
-              constraint = (y <= 1 + eps) && (1 - eps <= y)
-            }
+        Problem
+          { scope = mkBox [("x", (0.0, 1.0)), ("y", (0.0, 2.0))],
+            constraint = (y <= 1 + eps) && (1 - eps <= y)
+          }
       ),
       ( "circleEps",
-        mkProblem
-          $ Problem_
-            { scope = mkBox [("x", (0.0, 1.0)), ("y", (0.0, 1.0))],
-              constraint = (x * x + y * y <= 1.0) `formImpl` (x * x + y * y <= 1.0 + eps)
-            }
+        Problem
+          { scope = mkBox [("x", (0.0, 1.0)), ("y", (0.0, 1.0))],
+            constraint = (x * x + y * y <= 1.0) `formImpl` (x * x + y * y <= 1.0 + eps)
+          }
       ),
       ( "circleEpsSqrt",
-        mkProblem
-          $ Problem_
-            { scope = mkBox [("x", (0.0, 1.0)), ("y", (0.0, 1.0))],
-              constraint = (sqrt (x * x + y * y) <= 1.0) `formImpl` (sqrt (x * x + y * y) <= 1.0 + eps)
-            }
+        Problem
+          { scope = mkBox [("x", (0.0, 1.0)), ("y", (0.0, 1.0))],
+            constraint = (sqrt (x * x + y * y) <= 1.0) `formImpl` (sqrt (x * x + y * y) <= 1.0 + eps)
+          }
       ),
       ( "quadraticReduction",
-        mkProblem
-          $ Problem_
-            { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
-              constraint = 2.0 * x * x - 4.0 * x + 2.0 + y <= (-4.0) * (x - 1.0) + y
-            }
+        Problem
+          { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
+            constraint = 2.0 * x * x - 4.0 * x + 2.0 + y <= (-4.0) * (x - 1.0) + y
+          }
       ),
       ( "cubicReduction",
-        mkProblem
-          $ Problem_
-            { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
-              constraint = 6.0 * x * x * x + x * x - 10.0 * x + 3.0 + y <= (x - 1.0) * (x - 4.5) + y + eps
-            }
+        Problem
+          { scope = mkBox [("x", (-1.0, 1.0)), ("y", (-1.0, 1.0))],
+            constraint = 6.0 * x * x * x + x * x - 10.0 * x + 3.0 + y <= (x - 1.0) * (x - 4.5) + y + eps
+          }
       ),
       ( "vcApproxSinLE",
-        mkProblem
-          $ Problem_
-            { scope = mkBox [("r1", ((-3819831) / 4194304, 7639661 / 8388608)), ("x", ((-6851933) / 8388608, 6851933 / 8388608))],
-              constraint =
-                let t =
-                      ( ( x
-                            * ( ( ( ( (((-3350387) / 17179869184) * (x * x))
-                                        + (4473217 / 536870912)
-                                    )
-                                      * (x * x)
+        Problem
+          { scope = mkBox [("r1", ((-3819831) / 4194304, 7639661 / 8388608)), ("x", ((-6851933) / 8388608, 6851933 / 8388608))],
+            constraint =
+              let t =
+                    ( ( x
+                          * ( ( ( ( (((-3350387) / 17179869184) * (x * x))
+                                      + (4473217 / 536870912)
                                   )
-                                    + ((-349525) / 2097152)
+                                    * (x * x)
                                 )
-                                  * (x * x)
+                                  + ((-349525) / 2097152)
                               )
-                        )
-                          + x
+                                * (x * x)
+                            )
                       )
-                 in ( if x <= 1 / 67108864 && -x <= 1 / 67108864
-                        then r1 == x
-                        else
-                          (r1 <= t + (4498891 / 100000000000000))
-                            && ((t - (4498891 / 100000000000000)) <= r1)
+                        + x
                     )
-                      && not ((r1 + (-1.0 * (sin x))) <= (58 * (1 / 1000000000)) + eps)
-            }
+               in ( if x <= 1 / 67108864 && -x <= 1 / 67108864
+                      then r1 == x
+                      else
+                        (r1 <= t + (4498891 / 100000000000000))
+                          && ((t - (4498891 / 100000000000000)) <= r1)
+                  )
+                    && not ((r1 + (-1.0 * (sin x))) <= (58 * (1 / 1000000000)) + eps)
+          }
       )
     ]
   where
