@@ -7,9 +7,9 @@ import AERN2.MP (Kleenean, MPBall, mpBallP)
 import AERN2.MP qualified as MP
 import AERN2.MP.Affine (MPAffine (MPAffine), MPAffineConfig (..))
 import BranchAndPrune.BranchAndPrune (CanControlSteps (..), CanInitControl (..), Problem (..), Result (Result), showPavingSummary)
-import BranchAndPrune.ExampleInstances.RealConstraintEval.AffArith ()
-import BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall ()
-import BranchAndPrune.ExampleInstances.RealConstraints
+import BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.AffArith ()
+import BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.MPBall ()
+import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
   ( CanGetLiteral,
     CanGetVarDomain,
     exprVar,

@@ -16,7 +16,7 @@ import AERN2.MP.Dyadic (dyadic)
 import AERN2.MP.Affine.Type () -- has instance Hashable MPBall (TODO: move that instance)
 
 import BranchAndPrune.BranchAndPrune qualified as BP
-import BranchAndPrune.ExampleInstances.RealConstraints (Var)
+import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints (Var)
 import BranchAndPrune.Sets (Subset)
 import Data.List (sortOn)
 import Data.List qualified as List

@@ -1,9 +1,9 @@
-module BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall () where
+module BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.MPBall () where
 
 import AERN2.MP (MPBall)
 import qualified AERN2.MP as MP
-import BranchAndPrune.ExampleInstances.RealConstraints
-import BranchAndPrune.ExampleInstances.SimpleBoxes
+import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
+import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
 import qualified Data.Map as Map
 import Text.Printf (printf)
 

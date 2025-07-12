@@ -24,7 +24,7 @@ import AERN2.MP qualified as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
 import BranchAndPrune.BranchAndPrune (CanSplitProblem (splitProblem))
 import BranchAndPrune.BranchAndPrune qualified as BP
-import BranchAndPrune.ExampleInstances.RealConstraints
+import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
 import BranchAndPrune.Steps qualified as BP
 import Control.Monad.IO.Unlift (MonadUnliftIO)

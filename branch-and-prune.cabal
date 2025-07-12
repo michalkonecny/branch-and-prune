@@ -27,11 +27,11 @@ library
   exposed-modules:
       BranchAndPrune.BranchAndPrune
       BranchAndPrune.ExampleInstances.IntSets
-      BranchAndPrune.ExampleInstances.RealConstraintEval.AffArith
-      BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall
-      BranchAndPrune.ExampleInstances.RealConstraints
       BranchAndPrune.ExampleInstances.SimpleBoxes
       BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
+      BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.AffArith
+      BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.MPBall
+      BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
       BranchAndPrune.ForkUtils
       BranchAndPrune.Paving
       BranchAndPrune.Sets

@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module BranchAndPrune.ExampleInstances.RealConstraints
+module BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
   ( Var,
     Expr (..),
     UnaryOp (..),
