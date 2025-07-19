@@ -55,16 +55,16 @@ ghc-options:
 library:
   source-dirs: src
 
-# executables:
-#   branch-and-prune-example:
-#     main:                runExample.hs
-#     source-dirs:         app
-#     ghc-options:
-#     - -threaded
-#     - -rtsopts
-#     - -with-rtsopts=-N
-#     dependencies:
-#     - branch-and-prune
+executables:
+  branch-and-prune-example:
+    main:                runExample.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - branch-and-prune
 
 tests:
   branch-and-prune-test:

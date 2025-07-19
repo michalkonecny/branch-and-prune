@@ -1,5 +1,7 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use >" #-}
 
 module Main (main) where
 
@@ -110,7 +112,7 @@ problems (sampleR :: r) eps =
                         (r1 <= t + (4498891 / 100000000000000))
                           && ((t - (4498891 / 100000000000000)) <= r1)
                   )
-                    && not ((r1 + (-1.0 * (sin x))) <= (58 * (1 / 1000000000)) + eps)
+                    && not ((r1 + ((-1.0) * sin x)) <= (58 * (1 / 1000000000)) + eps)
           }
       )
     ]
