@@ -17,14 +17,12 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
-# - row-types
 - containers
 - monad-logger
 - text
 - time
 - unliftio-core
 - stm
-- hedis
 - mixed-types-num
 - aern2-mp
 - aern2-affarith
