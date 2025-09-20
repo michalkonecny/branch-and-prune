@@ -85,8 +85,8 @@ type HasKleenanComparison r =
     EqCompareType r r ~ Kleenean
   )
 
-instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m (FormB r) Box Boxes where
-  pruneProblemM (BP.Problem {scope, constraint}) = pure pavingP
+instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m () (FormB r) Box Boxes where
+  pruneProblemM _ (BP.Problem {scope, constraint}) = pure pavingP
     where
       cP = simplifyOnBox scope constraint
       pavingP = case cP of
@@ -189,6 +189,7 @@ boxBranchAndPrune (BoxBPParams {..} :: BoxBPParams r) = do
   BP.branchAndPruneM
     ( BP.Params
         { BP.problem,
+          BP.pruningMethod = (),
           BP.shouldAbort = const Nothing,
           BP.shouldGiveUpSolvingProblem = shouldGiveUpOnBoxProblem giveUpAccuracy :: BoxProblem r -> Bool,
           BP.dummyPriorityQueue,

@@ -36,8 +36,9 @@ class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   queueSplit :: priorityQueue -> Maybe (priorityQueue, priorityQueue)
   queueMerge :: priorityQueue -> priorityQueue -> priorityQueue
 
-data Params m basicSet set priorityQueue constraint = Params
+data Params m method basicSet set priorityQueue constraint = Params
   { problem :: Problem constraint basicSet,
+    pruningMethod :: method,
     shouldAbort :: Paving constraint basicSet set -> Maybe String,
     shouldGiveUpSolvingProblem :: Problem constraint basicSet -> Bool,
     maxThreads :: Int,
@@ -92,7 +93,7 @@ logDebugStr str = do
 branchAndPruneM ::
   ( IsSet set,
     CanSplitProblem constraint basicSet,
-    CanPrune m constraint basicSet set,
+    CanPrune m method constraint basicSet set,
     IsPriorityQueue priorityQueue (Problem constraint basicSet),
     step ~ Step (Problem constraint basicSet) (Paving constraint basicSet set),
     MonadLogger m,
@@ -102,9 +103,9 @@ branchAndPruneM ::
     Show basicSet,
     Show set
   ) =>
-  Params m basicSet set priorityQueue constraint ->
+  Params m method basicSet set priorityQueue constraint ->
   m (Result constraint basicSet set)
-branchAndPruneM (Params {problem = initialProblem, ..} :: Params m basicSet set priorityQueue constraint) =
+branchAndPruneM (Params {problem = initialProblem, ..} :: Params m method basicSet set priorityQueue constraint) =
   do
     -- initialise process resources
     threadResources <- liftIO initThreadResources
@@ -168,7 +169,7 @@ branchAndPruneM (Params {problem = initialProblem, ..} :: Params m basicSet set 
                       else do
                         -- pruning the next basic set
                         logDebugStrT $ printf "Pruning on: %s" (show problem)
-                        prunePaving <- pruneProblemM problem
+                        prunePaving <- pruneProblemM pruningMethod problem
                         when (pavingHasInfo prunePaving) $ do
                           reportStepR $ PruneStep {problem, prunePaving}
 

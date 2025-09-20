@@ -28,8 +28,8 @@ data Paving constraint basicSet set = Paving
   }
   deriving (Show, Generic)
 
-class CanPrune m constraint basicSet set where
-  pruneProblemM :: Problem constraint basicSet -> m (Paving constraint basicSet set)
+class CanPrune m method constraint basicSet set where
+  pruneProblemM :: method -> Problem constraint basicSet -> m (Paving constraint basicSet set)
 
 showPavingSummary ::
   ( ShowStats (Subset set basicSet),

@@ -23,7 +23,6 @@ where
 
 import BranchAndPrune.BranchAndPrune (CanControlSteps)
 import BranchAndPrune.BranchAndPrune qualified as BP
-import BranchAndPrune.Steps qualified as BP
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.Set qualified as Set
@@ -61,8 +60,8 @@ intSetLU l u = IntSet (Set.fromList [l .. u])
 intSetN :: Int -> IntSet
 intSetN n = IntSet (Set.singleton n)
 
-instance (Applicative m) => BP.CanPrune m IntConstraint BasicIntSet IntSet where
-  pruneProblemM (BP.Problem {scope, constraint}) = pure $ pruneBasicSet constraint scope
+instance (Applicative m) => BP.CanPrune m () IntConstraint BasicIntSet IntSet where
+  pruneProblemM _ (BP.Problem {scope, constraint}) = pure $ pruneBasicSet constraint scope
 
 pruneBasicSet :: IntConstraint -> BasicIntSet -> BP.Paving IntConstraint BasicIntSet IntSet
 pruneBasicSet constraint@(IntEq n) scope@(BasicIntSet l u)
@@ -114,11 +113,13 @@ newtype IntSetBPParams = IntSetBPParams
 
 intSetBranchAndPrune ::
   (MonadLogger m, MonadUnliftIO m, CanControlSteps m IntSetStep) =>
-  IntSetBPParams -> m IntSetResult
+  IntSetBPParams ->
+  m IntSetResult
 intSetBranchAndPrune (IntSetBPParams {..}) =
   BP.branchAndPruneM
     ( BP.Params
         { BP.problem,
+          BP.pruningMethod = (),
           BP.shouldAbort = const Nothing,
           BP.shouldGiveUpSolvingProblem = const False,
           BP.dummyPriorityQueue,
