@@ -8,7 +8,7 @@ module BranchAndPrune.ForkUtils
 where
 
 import Control.Concurrent (forkIO, killThread)
-import Control.Concurrent.STM (TVar, atomically, newTVar, newTVarIO, readTVar, retry, writeTVar)
+import Control.Concurrent.STM (TVar, atomically, newTVarIO, readTVar, retry, writeTVar)
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.IO.Unlift (MonadUnliftIO, toIO)
@@ -23,8 +23,8 @@ data ThreadResources = ThreadResources
 
 initThreadResources :: IO ThreadResources
 initThreadResources = do
-  numberOfThreadsTV <- atomically $ newTVar 1
-  nextThreadNumber <- atomically $ newTVar 1
+  numberOfThreadsTV <- newTVarIO 1
+  nextThreadNumber <- newTVarIO 1
   return $ ThreadResources {..}
 
 getNextTwoThreadNumbers :: ThreadResources -> IO (Int, Int)

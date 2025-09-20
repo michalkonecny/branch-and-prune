@@ -5,7 +5,6 @@ module BranchAndPrune.Steps
   )
 where
 
-import Data.Aeson qualified as A
 import GHC.Generics
 
 data Step problem paving
@@ -13,21 +12,18 @@ data Step problem paving
       { problem :: problem
       }
   | PruneStep
-      { problemHash :: String,
+      { problem :: problem,
         prunePaving :: paving
       }
   | SplitStep
-      { problemHash :: String,
+      { problem :: problem,
         pieces :: [problem]
       }
   | GiveUpOnProblemStep
-      { problemHash :: String
+      { problem :: problem
       }
   | AbortStep
       { detail :: String
       }
   | DoneStep
   deriving (Show, Generic)
-
-instance (A.ToJSON problem, A.ToJSON paving) => A.ToJSON (Step problem paving) where
-  toEncoding = A.genericToEncoding (A.defaultOptions)

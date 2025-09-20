@@ -21,18 +21,13 @@ module BranchAndPrune.ExampleInstances.IntSets
   )
 where
 
+import BranchAndPrune.BranchAndPrune (CanControlSteps)
 import BranchAndPrune.BranchAndPrune qualified as BP
-import BranchAndPrune.Logging
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
-import Data.Aeson qualified as A
 import Data.Set qualified as Set
-import GHC.Generics
-import Data.Hashable (Hashable)
 
-newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show, Generic)
-
-instance A.ToJSON IntSet
+newtype IntSet = IntSet (Set.Set Int) deriving (Eq, Show)
 
 instance BP.ShowStats IntSet where
   showStats (IntSet set) = show (Set.size set)
@@ -43,22 +38,14 @@ instance BP.IsSet IntSet where
   setUnion (IntSet set1) (IntSet set2) = IntSet (Set.union set1 set2)
 
 data BasicIntSet = BasicIntSet {lb :: Int, ub :: Int}
-  deriving (Eq, Show, Generic)
-
-instance Hashable BasicIntSet
-
-instance A.ToJSON BasicIntSet
+  deriving (Eq, Show)
 
 data IntConstraint = IntEq Int | IntTrue | IntFalse -- \| IntNeq Int
-  deriving (Eq, Show, Generic)
-
-instance Hashable IntConstraint
-
-instance A.ToJSON IntConstraint
+  deriving (Eq, Show)
 
 instance BP.CanSplitProblem IntConstraint BasicIntSet where
   splitProblem (BP.Problem {scope = BasicIntSet l u, constraint}) =
-    map (\bs -> BP.mkProblem (BP.Problem_ {scope = bs, constraint})) basicSets
+    map (\bs -> BP.Problem {scope = bs, constraint}) basicSets
     where
       basicSets = [BasicIntSet l m, BasicIntSet (m + 1) u]
         where
@@ -73,8 +60,8 @@ intSetLU l u = IntSet (Set.fromList [l .. u])
 intSetN :: Int -> IntSet
 intSetN n = IntSet (Set.singleton n)
 
-instance (Applicative m) => BP.CanPrune m IntConstraint BasicIntSet IntSet where
-  pruneProblemM (BP.Problem {scope, constraint}) = pure $ pruneBasicSet constraint scope
+instance (Applicative m) => BP.CanPrune m () IntConstraint BasicIntSet IntSet where
+  pruneProblemM _ (BP.Problem {scope, constraint}) = pure $ pruneBasicSet constraint scope
 
 pruneBasicSet :: IntConstraint -> BasicIntSet -> BP.Paving IntConstraint BasicIntSet IntSet
 pruneBasicSet constraint@(IntEq n) scope@(BasicIntSet l u)
@@ -85,7 +72,7 @@ pruneBasicSet constraint@(IntEq n) scope@(BasicIntSet l u)
       BP.pavingOuterUndecided
         scope
         (intSetLU l (n - 1))
-        [BP.mkProblem $ BP.Problem_ {scope = BasicIntSet n u, constraint}]
+        [BP.Problem {scope = BasicIntSet n u, constraint}]
   | l == u =
       BP.pavingOuter scope (intSetLU l u)
   | otherwise -- n < l < u || l < u < n
@@ -93,7 +80,7 @@ pruneBasicSet constraint@(IntEq n) scope@(BasicIntSet l u)
       -- no pruning but simplifying the constraint
       BP.pavingUndecided
         scope
-        [BP.mkProblem $ BP.Problem_ {scope = BasicIntSet l u, constraint = IntFalse}]
+        [BP.Problem {scope = BasicIntSet l u, constraint = IntFalse}]
 pruneBasicSet IntTrue scope@(BasicIntSet l u) = BP.pavingInner scope (intSetLU l u)
 pruneBasicSet IntFalse scope@(BasicIntSet l u) = BP.pavingOuter scope (intSetLU l u)
 
@@ -113,22 +100,33 @@ instance BP.IsPriorityQueue (IntSetStack elem) elem where
       (esL, esR) = splitAt splitPoint es
   queueMerge (IntSetStack stackL) (IntSetStack stackR) = IntSetStack $ stackL ++ stackR
 
-data IntSetBPParams = IntSetBPParams
-  { problem :: BP.Problem IntConstraint BasicIntSet
-  }
+type IntSetProblem = BP.Problem IntConstraint BasicIntSet
 
-intSetBranchAndPrune :: (MonadLogger m, MonadUnliftIO m) => IntSetBPParams -> m (BP.Result IntConstraint BasicIntSet IntSet)
+type IntSetPaving = BP.Paving IntConstraint BasicIntSet IntSet
+
+type IntSetStep = BP.Step IntSetProblem IntSetPaving
+
+type IntSetResult = BP.Result IntConstraint BasicIntSet IntSet
+
+newtype IntSetBPParams = IntSetBPParams
+  {problem :: IntSetProblem}
+
+intSetBranchAndPrune ::
+  (MonadLogger m, MonadUnliftIO m, CanControlSteps m IntSetStep) =>
+  IntSetBPParams ->
+  m IntSetResult
 intSetBranchAndPrune (IntSetBPParams {..}) =
   BP.branchAndPruneM
-    (getLoggingFunctions $ defaultBPLogConfig {shouldLogDebugMessages = True})
     ( BP.Params
         { BP.problem,
+          BP.pruningMethod = (),
           BP.shouldAbort = const Nothing,
           BP.shouldGiveUpSolvingProblem = const False,
           BP.dummyPriorityQueue,
-          BP.maxThreads = 2
+          BP.maxThreads = 2,
+          BP.shouldLog = True
         }
     )
   where
-    dummyPriorityQueue :: IntSetStack (BP.Problem IntConstraint BasicIntSet)
+    dummyPriorityQueue :: IntSetStack IntSetProblem
     dummyPriorityQueue = IntSetStack [problem]

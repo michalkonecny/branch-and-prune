@@ -1,6 +1,6 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.36.0.
+-- This file has been generated from package.yaml by hpack version 0.38.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -27,14 +27,12 @@ library
   exposed-modules:
       BranchAndPrune.BranchAndPrune
       BranchAndPrune.ExampleInstances.IntSets
-      BranchAndPrune.ExampleInstances.RealConstraintEval.AffArith
-      BranchAndPrune.ExampleInstances.RealConstraintEval.MPBall
-      BranchAndPrune.ExampleInstances.RealConstraints
       BranchAndPrune.ExampleInstances.SimpleBoxes
       BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
-      BranchAndPrune.ExampleInstances.SimpleBoxes.JSON
+      BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.AffArith
+      BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.MPBall
+      BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
       BranchAndPrune.ForkUtils
-      BranchAndPrune.Logging
       BranchAndPrune.Paving
       BranchAndPrune.Sets
       BranchAndPrune.Steps
@@ -54,12 +52,39 @@ library
   build-depends:
       aern2-affarith
     , aern2-mp
-    , aeson
     , base >=4.7 && <5
     , bytestring
     , containers
-    , hashable
-    , hedis
+    , mixed-types-num
+    , monad-logger
+    , stm
+    , text
+    , time
+    , unliftio-core
+  default-language: Haskell2010
+
+executable branch-and-prune-example
+  main-is: runExample.hs
+  other-modules:
+      Paths_branch_and_prune
+  autogen-modules:
+      Paths_branch_and_prune
+  hs-source-dirs:
+      app
+  default-extensions:
+      GHC2021
+      DuplicateRecordFields
+      RecordWildCards
+      OverloadedRecordDot
+      TypeFamilies
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-orphans -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aern2-affarith
+    , aern2-mp
+    , base >=4.7 && <5
+    , branch-and-prune
+    , bytestring
+    , containers
     , mixed-types-num
     , monad-logger
     , stm
@@ -89,13 +114,10 @@ test-suite branch-and-prune-test
   build-depends:
       aern2-affarith
     , aern2-mp
-    , aeson
     , base >=4.7 && <5
     , branch-and-prune
     , bytestring
     , containers
-    , hashable
-    , hedis
     , hspec
     , mixed-types-num
     , monad-logger

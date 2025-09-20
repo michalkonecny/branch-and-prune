@@ -1,9 +1,9 @@
-module BranchAndPrune.ExampleInstances.RealConstraintEval.AffArith () where
+module BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.AffArith () where
 
 import AERN2.MP.Affine (MPAffine)
 import qualified AERN2.MP.Affine as Aff
-import BranchAndPrune.ExampleInstances.RealConstraints
-import BranchAndPrune.ExampleInstances.SimpleBoxes
+import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
+import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
 import qualified Data.Map as Map
 import Text.Printf (printf)
 
@@ -14,7 +14,6 @@ boxGetVarDomain sampleAff (Box {varDomains}) var =
     Just dom -> Aff.mpAffineFromBall sampleAff errId dom
     where
       errId = var -- using variable's name as the error variable ID
-
 
 instance CanGetLiteral Box MPAffine where
   getLiteral sampleAff _box = Aff.mpAffineWithSample sampleAff

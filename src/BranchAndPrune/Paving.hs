@@ -17,7 +17,6 @@ module BranchAndPrune.Paving
 where
 
 import BranchAndPrune.Sets
-import Data.Aeson qualified as A
 import GHC.Generics
 import Text.Printf (printf)
 
@@ -29,11 +28,8 @@ data Paving constraint basicSet set = Paving
   }
   deriving (Show, Generic)
 
-instance (A.ToJSON set, A.ToJSON basicSet, A.ToJSON constraint) => A.ToJSON (Paving constraint basicSet set) where
-  toEncoding = A.genericToEncoding A.defaultOptions
-
-class CanPrune m constraint basicSet set where
-  pruneProblemM :: Problem constraint basicSet -> m (Paving constraint basicSet set)
+class CanPrune m method constraint basicSet set where
+  pruneProblemM :: method -> Problem constraint basicSet -> m (Paving constraint basicSet set)
 
 showPavingSummary ::
   ( ShowStats (Subset set basicSet),

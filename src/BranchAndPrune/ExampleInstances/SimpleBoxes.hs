@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -16,7 +15,6 @@ module BranchAndPrune.ExampleInstances.SimpleBoxes
     ExprB,
     FormB,
     BoxBPParams (..),
-    BPLogConfig (..),
     boxBranchAndPrune,
   )
 where
@@ -26,13 +24,12 @@ import AERN2.MP qualified as MP
 import AERN2.MP.Ball.Type (fromMPBallEndpoints, mpBallEndpoints)
 import BranchAndPrune.BranchAndPrune (CanSplitProblem (splitProblem))
 import BranchAndPrune.BranchAndPrune qualified as BP
-import BranchAndPrune.ExampleInstances.RealConstraints
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
-import BranchAndPrune.ExampleInstances.SimpleBoxes.JSON ()
-import BranchAndPrune.Logging
+import BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.AffArith ()
+import BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.MPBall ()
+import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
-import Data.Hashable (Hashable)
 import Data.Map qualified as Map
 import GHC.Records
 import MixedTypesNumPrelude
@@ -40,9 +37,9 @@ import MixedTypesNumPrelude
 -- import Prelude qualified as P
 
 {- Problem splitting -}
-instance (Hashable constraint) => BP.CanSplitProblem constraint Box where
+instance BP.CanSplitProblem constraint Box where
   splitProblem (BP.Problem {scope, constraint}) =
-    map (\box -> BP.mkProblem $ BP.Problem_ {scope = box, constraint}) $ splitBox scope
+    map (\box -> BP.Problem {scope = box, constraint}) $ splitBox scope
 
 splitBox :: Box -> [Box]
 splitBox box = case box.splitOrder of
@@ -75,6 +72,12 @@ type FormB r = Form (ExprB r)
 
 type BoxProblem r = BP.Problem (FormB r) Box
 
+type BoxPaving r = BP.Paving (FormB r) Box Boxes
+
+type BoxStep r = BP.Step (BoxProblem r) (BoxPaving r)
+
+type BoxResult r = BP.Result (FormB r) Box Boxes
+
 type HasKleenanComparison r =
   ( HasOrder r r,
     OrderCompareType r r ~ Kleenean,
@@ -82,14 +85,14 @@ type HasKleenanComparison r =
     EqCompareType r r ~ Kleenean
   )
 
-instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m (FormB r) Box Boxes where
-  pruneProblemM (BP.Problem {scope, constraint}) = pure pavingP
+instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m () (FormB r) Box Boxes where
+  pruneProblemM _ (BP.Problem {scope, constraint}) = pure pavingP
     where
       cP = simplifyOnBox scope constraint
       pavingP = case cP of
         FormTrue -> BP.pavingInner scope (Boxes [scope])
         FormFalse -> BP.pavingOuter scope (Boxes [scope])
-        _ -> BP.pavingUndecided scope [BP.mkProblem $ BP.Problem_ {scope, constraint = cP}]
+        _ -> BP.pavingUndecided scope [BP.Problem {scope, constraint = cP}]
 
 simplifyOnBox :: (HasKleenanComparison r) => Box -> FormB r -> FormB r
 simplifyOnBox box = simplify
@@ -162,7 +165,7 @@ data BoxBPParams r = BoxBPParams
   { problem :: BoxProblem r,
     maxThreads :: Int,
     giveUpAccuracy :: Rational,
-    logConfig :: BPLogConfig
+    shouldLog :: Bool
   }
 
 shouldGiveUpOnBoxProblem :: Rational -> BoxProblem r -> Bool
@@ -174,17 +177,24 @@ shouldGiveUpOnBoxProblem giveUpAccuracy (BP.Problem {scope = Box {..}}) =
       where
         diameter = 2 * MP.radius ball
 
-boxBranchAndPrune :: (MonadLogger m, MonadUnliftIO m, HasKleenanComparison r) => BoxBPParams r -> m (BP.Result (FormB r) Box Boxes)
+boxBranchAndPrune ::
+  ( MonadLogger m,
+    MonadUnliftIO m,
+    HasKleenanComparison r,
+    BP.CanControlSteps m (BoxStep r)
+  ) =>
+  BoxBPParams r ->
+  m (BoxResult r)
 boxBranchAndPrune (BoxBPParams {..} :: BoxBPParams r) = do
-  -- conn <- liftIO $ Redis.checkedConnect Redis.defaultConnectInfo
   BP.branchAndPruneM
-    (getLoggingFunctions logConfig)
     ( BP.Params
         { BP.problem,
+          BP.pruningMethod = (),
           BP.shouldAbort = const Nothing,
           BP.shouldGiveUpSolvingProblem = shouldGiveUpOnBoxProblem giveUpAccuracy :: BoxProblem r -> Bool,
           BP.dummyPriorityQueue,
-          BP.maxThreads
+          BP.maxThreads,
+          BP.shouldLog
         }
     )
   where
