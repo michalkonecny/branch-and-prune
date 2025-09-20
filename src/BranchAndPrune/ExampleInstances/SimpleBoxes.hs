@@ -28,7 +28,6 @@ import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.AffArith ()
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.MPBall ()
 import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
-import BranchAndPrune.Steps qualified as BP
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.Map qualified as Map
@@ -187,7 +186,6 @@ boxBranchAndPrune ::
   BoxBPParams r ->
   m (BoxResult r)
 boxBranchAndPrune (BoxBPParams {..} :: BoxBPParams r) = do
-  -- conn <- liftIO $ Redis.checkedConnect Redis.defaultConnectInfo
   BP.branchAndPruneM
     ( BP.Params
         { BP.problem,

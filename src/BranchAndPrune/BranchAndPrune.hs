@@ -4,6 +4,7 @@
 module BranchAndPrune.BranchAndPrune
   ( module BranchAndPrune.Sets,
     module BranchAndPrune.Paving,
+    module BranchAndPrune.Steps,
     IsPriorityQueue (..),
     Params (..),
     Result (..),
