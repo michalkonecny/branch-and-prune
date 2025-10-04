@@ -2,7 +2,8 @@
 
 module BranchAndPrune.Steps
   ( Step (..),
-  )
+  getStepProblems,
+  getStepPavings)
 where
 
 import GHC.Generics
@@ -27,3 +28,17 @@ data Step problem paving
       }
   | DoneStep
   deriving (Show, Generic)
+
+getStepProblems :: Step problem paving -> [problem]
+getStepProblems step = case step of
+  InitStep {problem} -> [problem]
+  PruneStep {problem} -> [problem]
+  SplitStep {pieces} -> pieces
+  GiveUpOnProblemStep {problem} -> [problem]
+  AbortStep {} -> []
+  DoneStep {} -> []
+
+getStepPavings :: Step problem paving -> [paving]
+getStepPavings step = case step of
+  PruneStep {prunePaving} -> [prunePaving]
+  _ -> []
