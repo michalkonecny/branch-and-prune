@@ -77,12 +77,11 @@ baseResultOnPrevPaving prevPaving res =
   res {paving = prevPaving `pavingMerge` res.paving}
 
 class CanInitControl m where
-  type ControlResources m
-  initControl :: m (ControlResources m)
-  finaliseControl :: ControlResources m -> m ()
+  initControl :: m ()
+  finaliseControl :: m ()
 
 class (CanInitControl m) => CanControlSteps m step where
-  reportStep :: ControlResources m -> step -> m ()
+  reportStep :: step -> m ()
 
 logDebugStr :: (MonadIO m, MonadLogger m) => String -> m ()
 logDebugStr str = do
@@ -90,48 +89,61 @@ logDebugStr str = do
   let msgToLog = currTime <> ": " <> str
   logDebugN (T.pack msgToLog)
 
+type StepCBS constraint basicSet set = 
+  Step (Problem constraint basicSet) (Paving constraint basicSet set)
+
 branchAndPruneM ::
   ( IsSet set,
     CanSplitProblem constraint basicSet,
     CanPrune m method constraint basicSet set,
     IsPriorityQueue priorityQueue (Problem constraint basicSet),
-    step ~ Step (Problem constraint basicSet) (Paving constraint basicSet set),
     MonadLogger m,
     MonadUnliftIO m,
-    CanControlSteps m step,
+    CanControlSteps m (StepCBS constraint basicSet set),
     Show constraint,
     Show basicSet,
     Show set
   ) =>
   Params m method basicSet set priorityQueue constraint ->
   m (Result constraint basicSet set)
-branchAndPruneM (Params {problem = initialProblem, ..} :: Params m method basicSet set priorityQueue constraint) =
+branchAndPruneM (params :: Params m method basicSet set priorityQueue constraint) =
   do
     -- initialise process resources
     threadResources <- liftIO initThreadResources
-    ctrlResources <- initControl
+    initControl
 
     -- run the process
-    result <- bpProcess ctrlResources threadResources
+    result <- bpProcess threadResources
 
     -- finalise process resources
-    finaliseControl ctrlResources
+    finaliseControl
     pure result
   where
-    bpProcess ctrlResources threadResources = do
+    reportStep' :: StepCBS constraint basicSet set -> m ()
+    reportStep' = reportStep
+
+    ( Params
+        { problem = initialProblem,
+          pruningMethod,
+          shouldAbort,
+          shouldGiveUpSolvingProblem,
+          maxThreads,
+          shouldLog
+        }
+      ) = params
+    bpProcess threadResources = do
       logDebugStrR "B&P process starting"
-      reportStepR $ InitStep {problem = initialProblem}
+      reportStep' $ InitStep {problem = initialProblem}
 
       -- start the recursive and parallel paving process with initial problem in the queue
       let initQueue = singletonQueue initialProblem
       result <- steps 0 (emptyPaving initialProblem.scope) initQueue
 
       logDebugStrR "B&P process finishing"
-      reportStepR DoneStep
+      reportStep' DoneStep
 
       pure result
       where
-        reportStepR = reportStep ctrlResources
         logDebugStrR s = when shouldLog $ logDebugStr s
 
         steps :: Int -> Paving constraint basicSet set -> priorityQueue -> m (Result constraint basicSet set)
@@ -141,7 +153,7 @@ branchAndPruneM (Params {problem = initialProblem, ..} :: Params m method basicS
             Just abortDetail ->
               do
                 -- abort
-                reportStepR $ AbortStep {detail = abortDetail}
+                reportStep' $ AbortStep {detail = abortDetail}
                 logDebugStrT $ "Aborting the B&P process: " ++ abortDetail
                 pure $ Result {paving = pavingSoFar, aborted = Just abortDetail}
             _ ->
@@ -160,7 +172,7 @@ branchAndPruneM (Params {problem = initialProblem, ..} :: Params m method basicS
                       then do
                         -- report giving up
                         logDebugStrT $ printf "Leaving problem undecided on: %s" (show problem.scope)
-                        reportStepR $ GiveUpOnProblemStep {problem}
+                        reportStep' $ GiveUpOnProblemStep {problem}
 
                         -- register problem as undecided and continue
                         let undecidedWithP = problem : pavingSoFar.undecided
@@ -171,7 +183,7 @@ branchAndPruneM (Params {problem = initialProblem, ..} :: Params m method basicS
                         logDebugStrT $ printf "Pruning on: %s" (show problem)
                         prunePaving <- pruneProblemM pruningMethod problem
                         when (pavingHasInfo prunePaving) $ do
-                          reportStepR $ PruneStep {problem, prunePaving}
+                          reportStep' $ PruneStep {problem, prunePaving}
 
                         -- register what the pruning decided
                         let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
@@ -190,7 +202,7 @@ branchAndPruneM (Params {problem = initialProblem, ..} :: Params m method basicS
                                   [p] -> splitProblem p
                                   problems -> problems
                             logDebugStrT $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
-                            reportStepR $ SplitStep {problem, pieces = pruneUndecidedSplit}
+                            reportStep' $ SplitStep {problem, pieces = pruneUndecidedSplit}
 
                             -- add the subset left-over from pruning to the queue
                             let queueWithPruningUndecided = queuePicked `queueAddMany` pruneUndecidedSplit
