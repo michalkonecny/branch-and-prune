@@ -8,7 +8,7 @@ module Main (main) where
 import AERN2.MP (Kleenean, MPBall, mpBallP)
 import AERN2.MP qualified as MP
 import AERN2.MP.Affine (MPAffine (MPAffine), MPAffineConfig (..))
-import BranchAndPrune.BranchAndPrune (CanControlSteps (..), CanInitControl (..), Problem (..), Result (Result), showPavingSummary)
+import BranchAndPrune.BranchAndPrune (CanControlSteps (..), Problem (..), Result (Result), showPavingSummary)
 import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
   ( CanGetLiteral,
     CanGetVarDomain,
@@ -166,14 +166,8 @@ main = do
     _ ->
       error $ "unknown arithmetic: " ++ arith
 
--- do-nothing trivial step reporting
-instance (Monad m) => CanInitControl m where
-  type ControlResources m = ()
-  initControl = pure ()
-  finaliseControl _ = pure ()
-
 instance (Monad m) => CanControlSteps m step where
-  reportStep _ _ = pure ()
+  reportStep _ = pure ()
 
 mainWithArgs :: (ProblemR r) => (BoxProblem r, Rational, Int, Bool) -> IO ()
 mainWithArgs (problem, giveUpAccuracy, maxThreads, isVerbose) =
