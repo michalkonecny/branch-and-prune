@@ -8,7 +8,6 @@ module BranchAndPrune.BranchAndPrune
     IsPriorityQueue (..),
     Params (..),
     Result (..),
-    CanInitControl (..),
     CanControlSteps (..),
     branchAndPruneM,
   )
@@ -76,11 +75,7 @@ baseResultOnPrevPaving ::
 baseResultOnPrevPaving prevPaving res =
   res {paving = prevPaving `pavingMerge` res.paving}
 
-class CanInitControl m where
-  initControl :: m ()
-  finaliseControl :: m ()
-
-class (CanInitControl m) => CanControlSteps m step where
+class CanControlSteps m step where
   reportStep :: step -> m ()
 
 logDebugStr :: (MonadIO m, MonadLogger m) => String -> m ()
@@ -89,7 +84,7 @@ logDebugStr str = do
   let msgToLog = currTime <> ": " <> str
   logDebugN (T.pack msgToLog)
 
-type StepCBS constraint basicSet set = 
+type StepCBS constraint basicSet set =
   Step (Problem constraint basicSet) (Paving constraint basicSet set)
 
 branchAndPruneM ::
@@ -110,14 +105,9 @@ branchAndPruneM (params :: Params m method basicSet set priorityQueue constraint
   do
     -- initialise process resources
     threadResources <- liftIO initThreadResources
-    initControl
 
     -- run the process
-    result <- bpProcess threadResources
-
-    -- finalise process resources
-    finaliseControl
-    pure result
+    bpProcess threadResources
   where
     reportStep' :: StepCBS constraint basicSet set -> m ()
     reportStep' = reportStep
