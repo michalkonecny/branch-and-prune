@@ -1,6 +1,7 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
 {-# HLINT ignore "Use >" #-}
 
 module Main (main) where
@@ -9,12 +10,6 @@ import AERN2.MP (Kleenean, MPBall, mpBallP)
 import AERN2.MP qualified as MP
 import AERN2.MP.Affine (MPAffine (MPAffine), MPAffineConfig (..))
 import BranchAndPrune.BranchAndPrune (CanControlSteps (..), Problem (..), Result (Result), showPavingSummary)
-import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
-  ( CanGetLiteral,
-    CanGetVarDomain,
-    exprVar,
-    formImpl,
-  )
 import BranchAndPrune.ExampleInstances.SimpleBoxes
   ( Box (..),
     BoxBPParams (..),
@@ -23,9 +18,16 @@ import BranchAndPrune.ExampleInstances.SimpleBoxes
     boxBranchAndPrune,
     mkBox,
   )
+import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
+  ( CanGetLiteral,
+    CanGetVarDomain,
+    exprVar,
+    formImpl,
+  )
 -- import GHC.Records
 
-import Control.Monad.IO.Unlift (MonadIO (liftIO), MonadUnliftIO)
+import BranchAndPrune.ForkUtils (MonadUnliftIOWithState (..))
+import Control.Monad.IO.Unlift (MonadIO (liftIO), MonadUnliftIO, toIO)
 import Control.Monad.Logger (MonadLogger, runStdoutLoggingT)
 import Data.List qualified as List
 import Data.Map qualified as Map
@@ -166,6 +168,13 @@ main = do
     _ ->
       error $ "unknown arithmetic: " ++ arith
 
+-- dummy instances for state and control stuctures
+instance (MonadUnliftIO m) => MonadUnliftIOWithState m where
+  type MonadUnliftIOState m = ()
+  toIOWithState ma = toIO ma >>= \b -> pure (b >>= \b2 -> pure (b2, ()))
+
+  absorbState _ = pure ()
+
 instance (Monad m) => CanControlSteps m step where
   reportStep _ = pure ()
 
@@ -173,7 +182,7 @@ mainWithArgs :: (ProblemR r) => (BoxProblem r, Rational, Int, Bool) -> IO ()
 mainWithArgs (problem, giveUpAccuracy, maxThreads, isVerbose) =
   runStdoutLoggingT task
   where
-    task :: (MonadLogger m, MonadUnliftIO m) => m ()
+    task :: (MonadLogger m, MonadIO m, MonadUnliftIOWithState m) => m ()
     task = do
       (Result paving _) <-
         boxBranchAndPrune

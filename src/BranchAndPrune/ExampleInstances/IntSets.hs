@@ -23,7 +23,8 @@ where
 
 import BranchAndPrune.BranchAndPrune (CanControlSteps)
 import BranchAndPrune.BranchAndPrune qualified as BP
-import Control.Monad.IO.Unlift (MonadUnliftIO)
+import BranchAndPrune.ForkUtils (MonadUnliftIOWithState)
+import Control.Monad.IO.Unlift (MonadIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.Set qualified as Set
 
@@ -112,7 +113,7 @@ newtype IntSetBPParams = IntSetBPParams
   {problem :: IntSetProblem}
 
 intSetBranchAndPrune ::
-  (MonadLogger m, MonadUnliftIO m, CanControlSteps m IntSetStep) =>
+  (MonadLogger m, MonadIO m, MonadUnliftIOWithState m, CanControlSteps m IntSetStep) =>
   IntSetBPParams ->
   m IntSetResult
 intSetBranchAndPrune (IntSetBPParams {..}) =

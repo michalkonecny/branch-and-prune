@@ -28,7 +28,8 @@ import BranchAndPrune.ExampleInstances.SimpleBoxes.Boxes
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.AffArith ()
 import BranchAndPrune.ExampleInstances.SimpleBoxes.Eval.MPBall ()
 import BranchAndPrune.ExampleInstances.SimpleBoxes.RealConstraints
-import Control.Monad.IO.Unlift (MonadUnliftIO)
+import BranchAndPrune.ForkUtils (MonadUnliftIOWithState)
+import Control.Monad.IO.Unlift (MonadIO)
 import Control.Monad.Logger (MonadLogger)
 import Data.Map qualified as Map
 import GHC.Records
@@ -179,7 +180,8 @@ shouldGiveUpOnBoxProblem giveUpAccuracy (BP.Problem {scope = Box {..}}) =
 
 boxBranchAndPrune ::
   ( MonadLogger m,
-    MonadUnliftIO m,
+    MonadIO m,
+    MonadUnliftIOWithState m,
     HasKleenanComparison r,
     BP.CanControlSteps m (BoxStep r)
   ) =>

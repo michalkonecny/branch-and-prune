@@ -13,13 +13,18 @@ module BranchAndPrune.BranchAndPrune
   )
 where
 
-import BranchAndPrune.ForkUtils (HasIsAborted (..), decideWhetherToFork, forkAndMerge, initThreadResources)
+import BranchAndPrune.ForkUtils
+  ( HasIsAborted (..),
+    MonadUnliftIOWithState,
+    decideWhetherToFork,
+    forkAndMerge,
+    initThreadResources,
+  )
 import BranchAndPrune.Paving
 import BranchAndPrune.Sets
 import BranchAndPrune.Steps
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, logDebugN)
 import Data.Maybe (isJust)
 import Data.Text qualified as T
@@ -93,7 +98,8 @@ branchAndPruneM ::
     CanPrune m method constraint basicSet set,
     IsPriorityQueue priorityQueue (Problem constraint basicSet),
     MonadLogger m,
-    MonadUnliftIO m,
+    MonadIO m,
+    MonadUnliftIOWithState m,
     CanControlSteps m (StepCBS constraint basicSet set),
     Show constraint,
     Show basicSet,

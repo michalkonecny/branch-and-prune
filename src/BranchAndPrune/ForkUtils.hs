@@ -1,5 +1,6 @@
 module BranchAndPrune.ForkUtils
   ( HasIsAborted (..),
+    MonadUnliftIOWithState (..),
     ThreadResources (..),
     initThreadResources,
     decideWhetherToFork,
@@ -11,7 +12,7 @@ import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.STM (TVar, atomically, newTVarIO, readTVar, retry, writeTVar)
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.IO.Unlift (MonadUnliftIO, toIO)
+import GHC.Conc (ThreadId)
 
 class HasIsAborted result where
   isAborted :: result -> Bool
@@ -31,7 +32,7 @@ getNextTwoThreadNumbers :: ThreadResources -> IO (Int, Int)
 getNextTwoThreadNumbers (ThreadResources {..}) = atomically $ do
   n <- readTVar nextThreadNumber
   writeTVar nextThreadNumber (n + 2)
-  pure (n, n+1)
+  pure (n, n + 1)
 
 decideWhetherToFork ::
   (MonadIO m) =>
@@ -49,18 +50,36 @@ decideWhetherToFork (ThreadResources {..}) maxThreads maybeForkPossible =
           pure (Just forkInfo)
         _ -> pure Nothing
 
+-- |
+--  A monad that supports unlifting to IO while carrying some state that can be
+--  passed to and from the IO computations.
+class MonadUnliftIOWithState m where
+  type MonadUnliftIOState m
+  toIOWithState :: m b -> m (IO (b, MonadUnliftIOState m))
+  absorbState :: MonadUnliftIOState m -> m ()
+
+-- An instance for StateT monads could look like this:
+
+-- instance (MonadUnliftIO m, Semigroup s) => MonadUnliftIOWithState (StateT s m) where
+--   type MonadUnliftIOState (StateT s m) = s
+--   toIOWithState mb = StateT $ \s -> do
+--     withRunInIO $ \runInIO -> do
+--       let ioWithS = runInIO (mb `runStateT` s)
+--       pure (ioWithS, s)
+--   absorbState s = StateT $ \s' -> pure ((), s <> s')
+
 forkAndMerge ::
-  (MonadUnliftIO m, HasIsAborted result, Semigroup result) =>
+  (MonadUnliftIOWithState m, MonadIO m, HasIsAborted result, Semigroup result) =>
   ThreadResources ->
   (Int -> m result) ->
   (Int -> m result) ->
   m result
-forkAndMerge tr@(ThreadResources {..}) compL compR =
+forkAndMerge tr@(ThreadResources {numberOfThreadsTV}) (compL :: Int -> m result) compR =
   do
-    (threaddNumber1, threaddNumber2) <- liftIO (getNextTwoThreadNumbers tr)
-    compL_IO <- toIO (compL threaddNumber1)
-    compR_IO <- toIO (compR threaddNumber2)
-    liftIO $
+    (threadNumber1, threadNumber2) <- liftIO (getNextTwoThreadNumbers tr)
+    compL_IO <- toIOWithState (compL threadNumber1)
+    compR_IO <- toIOWithState (compR threadNumber2)
+    (result, states) <- liftIO $
       do
         -- create shared variables for results:
         resultL_Var <- newTVarIO Nothing
@@ -74,19 +93,19 @@ forkAndMerge tr@(ThreadResources {..}) compL compR =
         thread2 <- forkComp abort_Var resultR_Var compR_IO
 
         -- wait for either an abort or both threads to complete:
-        result <- atomically $ do
+        resultAndState@(result, _) <- atomically $ do
           maybeAbortResult <- readTVar abort_Var
           case maybeAbortResult of
-            Just result ->
+            Just (result, s) ->
               -- one of the threads aborted
-              pure result -- pass on the aborted result
+              pure (result, [s]) -- pass on the aborted result
             _ -> do
               maybeResultL <- readTVar resultL_Var
               maybeResultR <- readTVar resultR_Var
               case (maybeResultL, maybeResultR) of
-                (Just resultL, Just resultR) ->
+                (Just (resultL, sL), Just (resultR, sR)) ->
                   -- both results available
-                  pure $ resultL <> resultR -- merge the results
+                  pure (resultL <> resultR, [sL, sR]) -- merge the results
                 _ ->
                   retry -- continue waiting
                   -- kill threads if aborted
@@ -94,17 +113,24 @@ forkAndMerge tr@(ThreadResources {..}) compL compR =
           killThread thread1
           killThread thread2
 
-        pure result
+        pure resultAndState
+    mapM_ absorbState states
+    pure result
   where
+    forkComp ::
+      TVar (Maybe (result, MonadUnliftIOState m)) ->
+      TVar (Maybe (result, MonadUnliftIOState m)) ->
+      IO (result, MonadUnliftIOState m) ->
+      IO ThreadId
     forkComp abort_Var result_Var comp_IO =
       forkIO $
         do
-          result <- comp_IO
+          resultAndState@(result, _) <- comp_IO
           atomically $ do
             -- decrement thread counter:
             nOfThreads <- readTVar numberOfThreadsTV
             writeTVar numberOfThreadsTV (nOfThreads - 1)
             -- pass on the result:
             if isAborted result
-              then abort_Var `writeTVar` Just result
-              else result_Var `writeTVar` Just result
+              then abort_Var `writeTVar` Just resultAndState
+              else result_Var `writeTVar` Just resultAndState
