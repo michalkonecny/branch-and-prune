@@ -12,13 +12,9 @@ data Step problem paving
   = InitStep
       { problem :: problem
       }
-  | PruneStep
+  | ProgressStep
       { problem :: problem,
-        prunePaving :: paving
-      }
-  | SplitStep
-      { problem :: problem,
-        pieces :: [problem]
+        progressPaving :: paving
       }
   | GiveUpOnProblemStep
       { problem :: problem
@@ -32,13 +28,12 @@ data Step problem paving
 getStepProblems :: Step problem paving -> [problem]
 getStepProblems step = case step of
   InitStep {problem} -> [problem]
-  PruneStep {problem} -> [problem]
-  SplitStep {pieces} -> pieces
+  ProgressStep {problem} -> [problem]
   GiveUpOnProblemStep {problem} -> [problem]
   AbortStep {} -> []
   DoneStep {} -> []
 
 getStepPavings :: Step problem paving -> [paving]
 getStepPavings step = case step of
-  PruneStep {prunePaving} -> [prunePaving]
+  ProgressStep {progressPaving} -> [progressPaving]
   _ -> []
