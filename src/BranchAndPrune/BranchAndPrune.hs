@@ -182,7 +182,9 @@ branchAndPruneM (params :: Params m method basicSet set priorityQueue constraint
                         -- if the pruning made no progress, force-split the problem
                         let progressPaving = if pavingHasInfo prunePaving
                               then prunePaving
-                              else pavingUndecided problem.scope (splitProblem problem)
+                              else pavingUndecided problem.scope (splitProblem $ head prunePaving.undecided)
+                              -- cannot use `problem` instead of `head prunePaving.undecided` above,
+                              -- because the problem may have had its splitting variables restricted by pruning
 
                         reportStep' $ ProgressStep {problem, progressPaving}
 
