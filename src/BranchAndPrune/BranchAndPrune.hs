@@ -175,11 +175,16 @@ branchAndPruneM (params :: Params m method basicSet set priorityQueue constraint
                         let pavingWithP = pavingSoFar {undecided = undecidedWithP}
                         steps threadNumber pavingWithP queuePicked
                       else do
-                        -- pruning the next basic set
-                        logDebugStrT $ printf "Pruning on: %s" (show problem)
+                        -- pruning / splitting the next basic set
+                        logDebugStrT $ printf "Pruning / splitting on: %s" (show problem)
                         prunePaving <- pruneProblemM pruningMethod problem
-                        when (pavingHasInfo prunePaving) $ do
-                          reportStep' $ PruneStep {problem, prunePaving}
+
+                        -- if the pruning made no progress, force-split the problem
+                        let progressPaving = if pavingHasInfo prunePaving
+                              then prunePaving
+                              else pavingUndecided problem.scope (splitProblem problem)
+
+                        reportStep' $ ProgressStep {problem, progressPaving}
 
                         -- register what the pruning decided
                         let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving
@@ -193,15 +198,8 @@ branchAndPruneM (params :: Params m method basicSet set priorityQueue constraint
                             -- continue
                             steps threadNumber pavingWithPruningDecided queuePicked
                           else do
-                            -- problem not fully solved by pruning, splitting the undecided sub-problems
-                            let pruneUndecidedSplit = case prunePaving.undecided of
-                                  [p] -> splitProblem p
-                                  problems -> problems
-                            logDebugStrT $ printf "Adding to queue: %s" (show pruneUndecidedSplit)
-                            reportStep' $ SplitStep {problem, pieces = pruneUndecidedSplit}
-
                             -- add the subset left-over from pruning to the queue
-                            let queueWithPruningUndecided = queuePicked `queueAddMany` pruneUndecidedSplit
+                            let queueWithPruningUndecided = queuePicked `queueAddMany` progressPaving.undecided
 
                             -- is there capacity to split the job among two threads?
                             forkInfo <- decideWhetherToFork threadResources maxThreads (queueSplit queueWithPruningUndecided)
