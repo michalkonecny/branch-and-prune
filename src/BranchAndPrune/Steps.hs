@@ -2,19 +2,22 @@
 
 module BranchAndPrune.Steps
   ( Step (..),
-  getStepProblems,
-  getStepPavings)
+    getStepProblems,
+    getStepPavings,
+  )
 where
 
+import BranchAndPrune.Paving (Paving (..), Problem)
 import GHC.Generics
 
-data Step problem paving
+data Step problem paving evalInfo
   = InitStep
       { problem :: problem
       }
   | ProgressStep
       { problem :: problem,
-        progressPaving :: paving
+        progressPaving :: paving,
+        evalInfo :: evalInfo
       }
   | GiveUpOnProblemStep
       { problem :: problem
@@ -25,15 +28,20 @@ data Step problem paving
   | DoneStep
   deriving (Show, Generic)
 
-getStepProblems :: Step problem paving -> [problem]
+getStepProblems ::
+  ( problem ~ Problem constraint basicSet,
+    paving ~ Paving constraint basicSet set
+  ) =>
+  Step problem paving evalInfo ->
+  [problem]
 getStepProblems step = case step of
   InitStep {problem} -> [problem]
-  ProgressStep {problem} -> [problem]
+  ProgressStep {problem, progressPaving} -> problem : progressPaving.undecided
   GiveUpOnProblemStep {problem} -> [problem]
   AbortStep {} -> []
   DoneStep {} -> []
 
-getStepPavings :: Step problem paving -> [paving]
+getStepPavings :: Step problem paving evalInfo -> [paving]
 getStepPavings step = case step of
   ProgressStep {progressPaving} -> [progressPaving]
   _ -> []
