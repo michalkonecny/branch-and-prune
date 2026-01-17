@@ -8,6 +8,7 @@ module BranchAndPrune.BranchAndPrune
     IsPriorityQueue (..),
     Params (..),
     Result (..),
+    CanPrune (..),
     CanControlSteps (..),
     branchAndPruneM,
   )
@@ -79,6 +80,9 @@ baseResultOnPrevPaving ::
   Result constraint basicSet set
 baseResultOnPrevPaving prevPaving res =
   res {paving = prevPaving `pavingMerge` res.paving}
+
+class CanPrune m method constraint basicSet set where
+  pruneProblemM :: method -> Problem constraint basicSet -> m (Paving constraint basicSet set)
 
 class CanControlSteps m step where
   reportStep :: step -> m ()
