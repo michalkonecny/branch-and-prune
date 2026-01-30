@@ -8,6 +8,7 @@ module BranchAndPrune.BranchAndPrune
     IsPriorityQueue (..),
     Params (..),
     Result (..),
+    CanPrune (..),
     CanControlSteps (..),
     branchAndPruneM,
   )
@@ -40,13 +41,14 @@ class IsPriorityQueue priorityQueue elem | priorityQueue -> elem where
   queueSplit :: priorityQueue -> Maybe (priorityQueue, priorityQueue)
   queueMerge :: priorityQueue -> priorityQueue -> priorityQueue
 
-data Params m method basicSet set priorityQueue constraint = Params
+data Params m method basicSet set priorityQueue constraint evalInfo = Params
   { problem :: Problem constraint basicSet,
     pruningMethod :: method,
     shouldAbort :: Paving constraint basicSet set -> Maybe String,
     shouldGiveUpSolvingProblem :: Problem constraint basicSet -> Bool,
     maxThreads :: Int,
     dummyPriorityQueue :: priorityQueue,
+    dummyEvalInfo :: evalInfo,
     shouldLog :: Bool
   }
 
@@ -80,6 +82,9 @@ baseResultOnPrevPaving ::
 baseResultOnPrevPaving prevPaving res =
   res {paving = prevPaving `pavingMerge` res.paving}
 
+class CanPrune m method constraint basicSet set evalInfo where
+  pruneProblemM :: method -> Problem constraint basicSet -> m (Paving constraint basicSet set, evalInfo)
+
 class CanControlSteps m step where
   reportStep :: step -> m ()
 
@@ -89,25 +94,25 @@ logDebugStr str = do
   let msgToLog = currTime <> ": " <> str
   logDebugN (T.pack msgToLog)
 
-type StepCBS constraint basicSet set =
-  Step (Problem constraint basicSet) (Paving constraint basicSet set)
+type StepCBS constraint basicSet set evalInfo =
+  Step (Problem constraint basicSet) (Paving constraint basicSet set) evalInfo
 
 branchAndPruneM ::
   ( IsSet set,
     CanSplitProblem constraint basicSet,
-    CanPrune m method constraint basicSet set,
+    CanPrune m method constraint basicSet set evalInfo,
     IsPriorityQueue priorityQueue (Problem constraint basicSet),
     MonadLogger m,
     MonadIO m,
     MonadUnliftIOWithState m,
-    CanControlSteps m (StepCBS constraint basicSet set),
+    CanControlSteps m (StepCBS constraint basicSet set evalInfo),
     Show constraint,
     Show basicSet,
     Show set
   ) =>
-  Params m method basicSet set priorityQueue constraint ->
+  Params m method basicSet set priorityQueue constraint evalInfo ->
   m (Result constraint basicSet set)
-branchAndPruneM (params :: Params m method basicSet set priorityQueue constraint) =
+branchAndPruneM (params :: Params m method basicSet set priorityQueue constraint evalInfo) =
   do
     -- initialise process resources
     threadResources <- liftIO initThreadResources
@@ -115,7 +120,7 @@ branchAndPruneM (params :: Params m method basicSet set priorityQueue constraint
     -- run the process
     bpProcess threadResources
   where
-    reportStep' :: StepCBS constraint basicSet set -> m ()
+    reportStep' :: StepCBS constraint basicSet set evalInfo -> m ()
     reportStep' = reportStep
 
     ( Params
@@ -177,7 +182,7 @@ branchAndPruneM (params :: Params m method basicSet set priorityQueue constraint
                       else do
                         -- pruning / splitting the next basic set
                         logDebugStrT $ printf "Pruning / splitting on: %s" (show problem)
-                        prunePaving <- pruneProblemM pruningMethod problem
+                        (prunePaving, evalInfo) <- pruneProblemM pruningMethod problem
 
                         -- if the pruning made no progress, force-split the problem
                         let progressPaving = if pavingHasInfo prunePaving
@@ -186,7 +191,7 @@ branchAndPruneM (params :: Params m method basicSet set priorityQueue constraint
                               -- cannot use `problem` instead of `head prunePaving.undecided` above,
                               -- because the problem may have had its splitting variables restricted by pruning
 
-                        reportStep' $ ProgressStep {problem, progressPaving}
+                        reportStep' $ ProgressStep {problem, progressPaving, evalInfo}
 
                         -- register what the pruning decided
                         let pavingWithPruningDecided = pavingSoFar `pavingAddDecided` prunePaving

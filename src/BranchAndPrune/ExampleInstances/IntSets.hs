@@ -61,8 +61,8 @@ intSetLU l u = IntSet (Set.fromList [l .. u])
 intSetN :: Int -> IntSet
 intSetN n = IntSet (Set.singleton n)
 
-instance (Applicative m) => BP.CanPrune m () IntConstraint BasicIntSet IntSet where
-  pruneProblemM _ (BP.Problem {scope, constraint}) = pure $ pruneBasicSet constraint scope
+instance (Applicative m) => BP.CanPrune m () IntConstraint BasicIntSet IntSet () where
+  pruneProblemM _ (BP.Problem {scope, constraint}) = pure (pruneBasicSet constraint scope, ())
 
 pruneBasicSet :: IntConstraint -> BasicIntSet -> BP.Paving IntConstraint BasicIntSet IntSet
 pruneBasicSet constraint@(IntEq n) scope@(BasicIntSet l u)
@@ -105,7 +105,7 @@ type IntSetProblem = BP.Problem IntConstraint BasicIntSet
 
 type IntSetPaving = BP.Paving IntConstraint BasicIntSet IntSet
 
-type IntSetStep = BP.Step IntSetProblem IntSetPaving
+type IntSetStep = BP.Step IntSetProblem IntSetPaving ()
 
 type IntSetResult = BP.Result IntConstraint BasicIntSet IntSet
 
@@ -123,11 +123,9 @@ intSetBranchAndPrune (IntSetBPParams {..}) =
           BP.pruningMethod = (),
           BP.shouldAbort = const Nothing,
           BP.shouldGiveUpSolvingProblem = const False,
-          BP.dummyPriorityQueue,
+          BP.dummyPriorityQueue = IntSetStack [problem],
+          BP.dummyEvalInfo = (),
           BP.maxThreads = 2,
           BP.shouldLog = True
         }
     )
-  where
-    dummyPriorityQueue :: IntSetStack IntSetProblem
-    dummyPriorityQueue = IntSetStack [problem]

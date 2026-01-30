@@ -75,7 +75,7 @@ type BoxProblem r = BP.Problem (FormB r) Box
 
 type BoxPaving r = BP.Paving (FormB r) Box Boxes
 
-type BoxStep r = BP.Step (BoxProblem r) (BoxPaving r)
+type BoxStep r = BP.Step (BoxProblem r) (BoxPaving r) ()
 
 type BoxResult r = BP.Result (FormB r) Box Boxes
 
@@ -86,8 +86,8 @@ type HasKleenanComparison r =
     EqCompareType r r ~ Kleenean
   )
 
-instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m () (FormB r) Box Boxes where
-  pruneProblemM _ (BP.Problem {scope, constraint}) = pure pavingP
+instance (Applicative m, HasKleenanComparison r) => BP.CanPrune m () (FormB r) Box Boxes () where
+  pruneProblemM _ (BP.Problem {scope, constraint}) = pure (pavingP, ())
     where
       cP = simplifyOnBox scope constraint
       pavingP = case cP of
@@ -194,11 +194,9 @@ boxBranchAndPrune (BoxBPParams {..} :: BoxBPParams r) = do
           BP.pruningMethod = (),
           BP.shouldAbort = const Nothing,
           BP.shouldGiveUpSolvingProblem = shouldGiveUpOnBoxProblem giveUpAccuracy :: BoxProblem r -> Bool,
-          BP.dummyPriorityQueue,
+          BP.dummyPriorityQueue = BoxStack [problem],
+          BP.dummyEvalInfo = (),
           BP.maxThreads,
           BP.shouldLog
         }
     )
-  where
-    dummyPriorityQueue :: BoxStack r
-    dummyPriorityQueue = BoxStack [problem]

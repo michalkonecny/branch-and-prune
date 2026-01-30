@@ -1,7 +1,6 @@
 module BranchAndPrune.Paving
   ( Problem (..),
     Paving (..),
-    CanPrune (..),
     showPavingSummary,
     emptyPaving,
     pavingMerge,
@@ -27,9 +26,6 @@ data Paving constraint basicSet set = Paving
     outer :: set
   }
   deriving (Show, Generic)
-
-class CanPrune m method constraint basicSet set where
-  pruneProblemM :: method -> Problem constraint basicSet -> m (Paving constraint basicSet set)
 
 showPavingSummary ::
   ( ShowStats (Subset set basicSet),
